@@ -19,6 +19,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.4",
     "commander": "^12.1.0"
   },
   "devDependencies": {

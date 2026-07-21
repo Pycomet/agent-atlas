@@ -1,0 +1,15 @@
+{
+  "skill:git-workflow": "ops",
+  "skill:deep-research": "research",
+  "skill:deploy-checklist": "ops",
+  "skill:superpowers:brainstorming": "research",
+  "skill:broken-skill": "engineering",
+  "agent:code-reviewer": "engineering",
+  "agent:doc-writer": "writing",
+  "agent:proposal-agent": "writing",
+  "mcp:notion": "writing",
+  "mcp:linear": "ops",
+  "mcp:grafana": "ops",
+  "hook:PostToolUse:Bash": "ops",
+  "hook:SessionStart:*": "ops"
+}
