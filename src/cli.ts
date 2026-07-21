@@ -1,11 +1,14 @@
 #!/usr/bin/env node
+import { spawn } from 'node:child_process';
+import { promises as fs } from 'node:fs';
 import { Command } from 'commander';
 import os from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { adapters } from './adapter.js';
 import { createAnthropicModel } from './classifier/anthropic-model.js';
 import { classify } from './classifier/index.js';
 import { mergeUsage } from './miner.js';
+import { renderAtlas } from './renderer/index.js';
 import type { Axis, InventoryItem, Usage, UsageEntry } from './types.js';
 import { AXES } from './types.js';
 
@@ -16,6 +19,18 @@ interface CliOptions {
   project: string;
   rough?: boolean;
   atlasDir?: string;
+  out: string;
+  open: boolean;
+}
+
+/** Best-effort browser launch — never fails the run, never blocks exit. */
+function openInBrowser(path: string): void {
+  const launcher = process.platform === 'darwin' ? 'open' : 'xdg-open';
+  try {
+    spawn(launcher, [path], { detached: true, stdio: 'ignore' }).unref();
+  } catch {
+    // Fine — the path is printed; the user can open it themselves.
+  }
 }
 
 const program = new Command();
@@ -30,6 +45,8 @@ program
   .option('--days <n>', 'usage window in days', '30')
   .option('--rough', 'force keyword-heuristic classification (skip the API)')
   .option('--atlas-dir <dir>', 'directory for classification cache and overrides.json')
+  .option('--out <file>', 'where to write atlas.html', './atlas.html')
+  .option('--no-open', 'do not open atlas.html in the browser')
   .option('--home <dir>', 'treat <dir> as the home directory (mainly for testing)')
   .option('--project <dir>', 'project directory to scan', process.cwd())
   .action(async (opts: CliOptions) => {
@@ -67,6 +84,20 @@ program
       process.stdout.write(`${JSON.stringify({ days, inventory, usage, classification }, null, 2)}\n`);
       return;
     }
+
+    // Default flow (spec §3): write the self-contained map and open it.
+    const html = await renderAtlas({
+      generatedAt: new Date().toISOString(),
+      days,
+      tool: 'claude-code',
+      inventory,
+      usage,
+      classification,
+    });
+    const outPath = resolve(opts.out);
+    await fs.writeFile(outPath, html);
+    const shouldOpen = opts.open && process.env['CI'] === undefined;
+    if (shouldOpen) openInBrowser(outPath);
 
     const kindCounts = new Map<string, number>();
     for (const item of inventory.items) {
@@ -114,7 +145,8 @@ program
       lines.push('No usage recorded in this window.');
     }
     lines.push(`Never used in this window: ${neverUsed.length} items`, '');
-    lines.push('Run with --json for the full data. The map arrives in a later milestone.');
+    lines.push(`Map written to ${outPath}${shouldOpen ? ' (opening in browser)' : ''}`);
+    lines.push('Run with --json for the raw data.');
     process.stdout.write(`${lines.join('\n')}\n`);
   });
 
