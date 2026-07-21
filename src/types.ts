@@ -44,6 +44,32 @@ export interface ScanOptions {
   projectDir?: string;
 }
 
+/** The five capability axes, fixed for v1 (spec §4.3). Order breaks ties. */
+export const AXES = ['engineering', 'writing', 'research', 'design', 'ops'] as const;
+export type Axis = (typeof AXES)[number];
+export type AxisWeights = Record<Axis, number>;
+
+export type ClassificationMethod = 'llm' | 'heuristic' | 'override';
+
+export interface Classification {
+  itemId: string;
+  /** Sums to ~1. */
+  weights: AxisWeights;
+  primary: Axis;
+  /** One plain-English line. */
+  summary: string;
+  method: ClassificationMethod;
+  contentHash: string;
+  /** e.g. ["low-confidence"], ["llm-fallback"] */
+  flags?: string[];
+}
+
+export interface ClassificationOutput {
+  /** Strategy used for non-overridden items; "heuristic" is rough mode (spec §6). */
+  mode: 'llm' | 'heuristic';
+  items: Classification[];
+}
+
 export interface MineOptions {
   homeDir: string;
   /** Usage window in days (default 30). */
