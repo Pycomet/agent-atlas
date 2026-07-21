@@ -19,7 +19,7 @@ Prior-art check (July 2026) confirmed nobody has built this: existing tools do t
 ## 2. Target user & scope
 
 - **v1 target:** Claude Code users (biggest, most vocal audience; richest local data).
-- **Out of scope for v1:** Cursor, ChatGPT, Windsurf, other tools. The scanner is built behind an adapter interface so these can be added later, but v1 ships Claude Code only.
+- **Out of scope for v1:** Cursor, ChatGPT, Windsurf, other tools. The scanner is built behind an adapter interface so these can be added later, but v1 ships Claude Code only. (M1 shipped the adapter-shaped seam — pure `scan()`/`mineUsage()` functions returning tool-agnostic JSON; the formal `ToolAdapter` interface is an M2 task, see §8.)
 
 ## 3. What v1 does (user experience)
 
@@ -135,7 +135,7 @@ Without `ANTHROPIC_API_KEY`, classification falls back to a keyword heuristic (t
 | # | Feature | Done when |
 |---|---|---|
 | M1 | Scanner + Usage Miner | `npx agent-atlas --json` prints correct inventory+usage for the fixture tree and for Alfred's real machine |
-| M2 | Classifier | Fixture items classified correctly against hand-labeled expectations; cache + overrides work; heuristic fallback works with no key |
+| M2 | Classifier | Fixture items classified correctly against hand-labeled expectations; cache + overrides work; heuristic fallback works with no key. Also: formalize the §2 adapter interface — declare a `ToolAdapter` interface (`scan() → Inventory`, `mineUsage() → Usage`), rename the M1 Claude Code implementation to `ClaudeCodeAdapter`, and have the CLI iterate adapters. No behavior change; existing golden tests still pass unmodified |
 | M3 | Renderer | `atlas.html` opens with clustered map, tuning bar, working node detail panel |
 | M4 | Diagnostics + share card | Three diagnostic lists render with real numbers; PNG export works |
 
