@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { adapters } from './adapter.js';
 import { createAnthropicModel } from './classifier/anthropic-model.js';
 import { classify } from './classifier/index.js';
+import { diagnose } from './diagnostics.js';
 import { mergeUsage } from './miner.js';
 import { renderAtlas } from './renderer/index.js';
 import type { Axis, InventoryItem, Usage, UsageEntry } from './types.js';
@@ -21,6 +22,7 @@ interface CliOptions {
   atlasDir?: string;
   out: string;
   open: boolean;
+  share?: boolean;
 }
 
 /** Best-effort browser launch — never fails the run, never blocks exit. */
@@ -45,6 +47,7 @@ program
   .option('--days <n>', 'usage window in days', '30')
   .option('--rough', 'force keyword-heuristic classification (skip the API)')
   .option('--atlas-dir <dir>', 'directory for classification cache and overrides.json')
+  .option('--share', 'render the map and highlight the shareable PNG card export')
   .option('--out <file>', 'where to write atlas.html', './atlas.html')
   .option('--no-open', 'do not open atlas.html in the browser')
   .option('--home <dir>', 'treat <dir> as the home directory (mainly for testing)')
@@ -75,13 +78,14 @@ program
 
     const apiKey = process.env['ANTHROPIC_API_KEY'];
     const useLlm = opts.rough !== true && typeof apiKey === 'string' && apiKey !== '';
-    const classification = await classify(inventory, {
-      atlasDir,
-      model: useLlm ? createAnthropicModel() : null,
-    });
+    const model = useLlm ? createAnthropicModel() : null;
+    const classification = await classify(inventory, { atlasDir, model });
+    const diagnostics = await diagnose(inventory, usage, classification, days, { model });
 
     if (opts.json === true) {
-      process.stdout.write(`${JSON.stringify({ days, inventory, usage, classification }, null, 2)}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ days, inventory, usage, classification, diagnostics }, null, 2)}\n`,
+      );
       return;
     }
 
@@ -93,6 +97,7 @@ program
       inventory,
       usage,
       classification,
+      diagnostics,
     });
     const outPath = resolve(opts.out);
     await fs.writeFile(outPath, html);
@@ -144,8 +149,23 @@ program
     } else {
       lines.push('No usage recorded in this window.');
     }
-    lines.push(`Never used in this window: ${neverUsed.length} items`, '');
+    lines.push(`Never used in this window: ${neverUsed.length} items`);
+    const topDead = diagnostics.deadWeight[0];
+    if (topDead !== undefined) {
+      const more = diagnostics.deadWeight.length - 1;
+      lines.push(`Dead weight: ${topDead.line}${more > 0 ? ` (+${more} more in the page)` : ''}`);
+    }
+    if (diagnostics.overlaps.length > 0) {
+      lines.push(`Overlaps: ${diagnostics.overlaps.length} suspected duplicate pair(s)`);
+    }
+    if (diagnostics.gaps.length > 0) {
+      lines.push(`Gaps: no real coverage for ${diagnostics.gaps.map((g) => g.axis).join(', ')}`);
+    }
+    lines.push('');
     lines.push(`Map written to ${outPath}${shouldOpen ? ' (opening in browser)' : ''}`);
+    if (opts.share === true) {
+      lines.push("Share card: click the 'Share card' button in the page header to export the PNG.");
+    }
     lines.push('Run with --json for the raw data.');
     process.stdout.write(`${lines.join('\n')}\n`);
   });

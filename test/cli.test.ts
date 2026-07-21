@@ -166,6 +166,28 @@ describe('agent-atlas CLI', () => {
     expect(item.primary).toBe('design');
   });
 
+  it('--json includes a diagnostics report with the three lists', () => {
+    const out = runCli(
+      '--json', '--home', HOME, '--project', PROJECT, '--days', '36500',
+      '--atlas-dir', tmpAtlasDir(),
+    );
+    const parsed = JSON.parse(out) as CliJson & {
+      diagnostics: { deadWeight: unknown[]; overlaps: unknown[]; gaps: unknown[] };
+    };
+    expect(Array.isArray(parsed.diagnostics.deadWeight)).toBe(true);
+    expect(Array.isArray(parsed.diagnostics.overlaps)).toBe(true);
+    expect(Array.isArray(parsed.diagnostics.gaps)).toBe(true);
+    expect(parsed.diagnostics.deadWeight.length).toBeGreaterThan(0);
+  });
+
+  it('--share runs the default flow and points at the in-page export button', () => {
+    const out = runCli(
+      '--share', '--home', HOME, '--project', PROJECT, '--days', '36500',
+      '--atlas-dir', tmpAtlasDir(), '--out', join(tmpAtlasDir(), 'atlas.html'), '--no-open',
+    );
+    expect(out.toLowerCase()).toContain('share card');
+  });
+
   it('labels rough mode in the human summary and prints a tuning line', () => {
     const out = runCli(
       '--home', HOME, '--project', PROJECT, '--days', '36500',

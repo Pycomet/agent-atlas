@@ -66,6 +66,7 @@ export async function renderAtlas(data: AtlasData): Promise<string> {
     </div>
     <div id="tuning-bar" aria-label="Capability tuning across the five axes"></div>
   </div>
+  <button id="share-btn" type="button" title="Export a shareable PNG card">Share card ↓</button>
 </header>
 <main id="stage">
   <svg id="map" role="img" aria-label="Force-directed map of installed capabilities"></svg>
@@ -79,6 +80,23 @@ export async function renderAtlas(data: AtlasData): Promise<string> {
   <aside id="detail-panel" aria-live="polite" hidden></aside>
   <div id="tooltip" hidden></div>
 </main>
+<section id="diagnostics" aria-label="Diagnostics">
+  <h2 class="diag-heading">Diagnostics</h2>
+  <div class="diag-cols">
+    <div class="diag-col" id="diag-dead">
+      <h3 class="mapkey-title">Dead weight</h3>
+      <ol class="diag-list"></ol>
+    </div>
+    <div class="diag-col" id="diag-overlaps">
+      <h3 class="mapkey-title">Overlaps</h3>
+      <ol class="diag-list"></ol>
+    </div>
+    <div class="diag-col" id="diag-gaps">
+      <h3 class="mapkey-title">Gaps</h3>
+      <ol class="diag-list"></ol>
+    </div>
+  </div>
+</section>
 <footer class="colophon">
   <span>${privacyNote}</span>
   <span>generated ${escapeHtml(data.generatedAt.slice(0, 10))} · agent-atlas</span>
