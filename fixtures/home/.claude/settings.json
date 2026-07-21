@@ -1,0 +1,16 @@
+{
+  "model": "opus",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'bash done' >> ~/.claude/hook.log"
+          }
+        ]
+      }
+    ]
+  }
+}
