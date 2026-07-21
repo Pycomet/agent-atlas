@@ -1,0 +1,6 @@
+{"type":"summary","summary":"Fixture session one","leafUuid":"aaa-111"}
+{"type":"user","timestamp":"2026-07-10T09:59:00.000Z","message":{"role":"user","content":"help me commit and review this"}}
+{"type":"assistant","timestamp":"2026-07-10T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Skill","input":{"skill":"git-workflow"}}]}}
+{"type":"assistant","timestamp":"2026-07-10T10:05:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Searching Notion for the roadmap."},{"type":"tool_use","id":"t2","name":"mcp__notion__search","input":{"query":"roadmap"}}]}}
+{"type":"assistant","timestamp":"2026-07-10T10:10:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Task","input":{"subagent_type":"code-reviewer","prompt":"review the diff"}}]}}
+this line is not valid json {{{

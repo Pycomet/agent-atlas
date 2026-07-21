@@ -1,0 +1,1 @@
+Not a transcript — the miner must ignore non-jsonl files.

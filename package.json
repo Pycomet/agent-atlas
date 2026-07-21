@@ -1,0 +1,29 @@
+{
+  "name": "agent-atlas",
+  "version": "0.1.0",
+  "description": "Scans your AI coding setup and turns it into an interactive mind map. Read-only, local-only.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "agent-atlas": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
