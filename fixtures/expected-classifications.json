@@ -3,6 +3,8 @@
   "skill:deep-research": "research",
   "skill:deploy-checklist": "ops",
   "skill:superpowers:brainstorming": "research",
+  "skill:frontend-design:frontend-design": "design",
+  "mcp:playwright": "engineering",
   "skill:broken-skill": "engineering",
   "agent:code-reviewer": "engineering",
   "agent:doc-writer": "writing",

@@ -57,7 +57,11 @@ export async function classify(
 
   if (model !== null) {
     const cache = await loadCache(opts.atlasDir);
-    const uncached = prepared.filter((entry) => cache[entry.hash] === undefined);
+    // Hooks never go to the API: their only text is derived from a shell
+    // command, and the heuristic's ops prior already classifies them well.
+    const uncached = prepared.filter(
+      (entry) => entry.item.kind !== 'hook' && cache[entry.hash] === undefined,
+    );
     const llmResults: Map<string, LlmItemResult> =
       uncached.length > 0
         ? await llmClassify(
@@ -68,6 +72,20 @@ export async function classify(
 
     let cacheDirty = false;
     for (const entry of prepared) {
+      if (entry.item.kind === 'hook') {
+        const h = heuristicClassify(entry.item);
+        const classification: Classification = {
+          itemId: entry.item.id,
+          weights: h.weights,
+          primary: h.primary,
+          summary: h.summary,
+          method: 'heuristic',
+          contentHash: entry.hash,
+        };
+        if (h.flags !== undefined && h.flags.length > 0) classification.flags = h.flags;
+        results.set(entry.item.id, classification);
+        continue;
+      }
       const hit = cache[entry.hash];
       if (hit !== undefined) {
         results.set(entry.item.id, {
@@ -125,7 +143,12 @@ export async function classify(
   const overrides = await loadOverrides(opts.atlasDir);
   for (const [itemId, override] of Object.entries(overrides)) {
     const existing = results.get(itemId);
-    if (existing === undefined) continue;
+    if (existing === undefined) {
+      process.stderr.write(
+        `agent-atlas: override for "${itemId}" does not match any classified item — ignoring\n`,
+      );
+      continue;
+    }
     results.set(itemId, {
       itemId,
       weights: override.weights ?? oneHot(override.primary),

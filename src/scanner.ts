@@ -81,20 +81,35 @@ async function skillsFromDir(skillsDir: string, namePrefix = ''): Promise<Invent
 
 const SEMVER_LIKE = /^\d+(\.\d+){0,3}$/;
 
-/** `<plugin dir>/skills/<name>/SKILL.md`, plugin name from the path (skipping version dirs). */
+/**
+ * The invocation prefix Claude Code uses is the plugin's manifest name — the
+ * cache path is NOT authoritative (version dirs can be non-semver, e.g.
+ * "unknown", which used to poison the prefix and break usage attribution).
+ */
+async function pluginNameFor(containerDir: string): Promise<string> {
+  const manifest = await readJsonSafe(join(containerDir, '.claude-plugin', 'plugin.json'));
+  const name = manifest?.['name'];
+  if (typeof name === 'string' && name !== '') return name;
+  const segments = containerDir.split(sep).filter(Boolean);
+  let plugin = segments[segments.length - 1] ?? 'plugin';
+  if (SEMVER_LIKE.test(plugin) && segments.length >= 2) {
+    plugin = segments[segments.length - 2] ?? plugin;
+  }
+  return plugin;
+}
+
+/** `<plugin dir>/skills/<name>/SKILL.md` — plugin name from the manifest, path as fallback. */
 async function pluginSkills(cacheDir: string): Promise<InventoryItem[]> {
   const items: InventoryItem[] = [];
   const walk = async (dir: string, depth: number): Promise<void> => {
     if (depth > 8) return;
     for (const entry of await readDirSafe(dir)) {
       if (!entry.isDirectory()) continue;
+      // Plugin checkouts ship their own dev config (.claude/skills, .git, …) — never inventory it.
+      if (entry.name.startsWith('.')) continue;
       const child = join(dir, entry.name);
       if (entry.name === 'skills') {
-        const segments = dir.split(sep).filter(Boolean);
-        let plugin = segments[segments.length - 1] ?? 'plugin';
-        if (SEMVER_LIKE.test(plugin) && segments.length >= 2) {
-          plugin = segments[segments.length - 2] ?? plugin;
-        }
+        const plugin = await pluginNameFor(dir);
         items.push(...(await skillsFromDir(child, `${plugin}:`)));
       } else {
         await walk(child, depth + 1);
@@ -189,7 +204,9 @@ function hookItems(config: Record<string, unknown> | null, sourcePath: string): 
           id: `hook:${event}:${matcher}`,
           kind: 'hook',
           name: `${event}(${matcher})`,
-          description: command,
+          // Never the raw command: commands can hold secrets, and descriptions
+          // are the one field that may leave the machine (classification API).
+          description: `${event} hook (${matcher})`,
           sourcePath,
           sizeBytes: Buffer.byteLength(JSON.stringify(hook), 'utf8'),
           event,
@@ -239,29 +256,54 @@ export async function scan(opts: ScanOptions): Promise<Inventory> {
     items.push(...(await agentsFromDir(join(projectDir, '.claude', 'agents'))));
   }
 
-  // MCP servers + hooks from every config source (first occurrence of an MCP name wins)
-  const configSources: string[] = [
-    join(homeDir, '.claude.json'),
-    join(claudeDir, 'settings.json'),
-  ];
-  if (projectDir !== undefined) {
-    configSources.push(
-      join(projectDir, '.mcp.json'),
-      join(projectDir, '.claude', 'settings.json'),
-      join(projectDir, '.claude', 'settings.local.json'),
-    );
+  // Config files (each read once)
+  const homeClaudeJsonPath = join(homeDir, '.claude.json');
+  const homeClaudeJson = await readJsonSafe(homeClaudeJsonPath);
+  const homeSettingsPath = join(claudeDir, 'settings.json');
+  const homeSettings = await readJsonSafe(homeSettingsPath);
+  const projectLocalPath = projectDir ? join(projectDir, '.claude', 'settings.local.json') : null;
+  const projectSettingsPath = projectDir ? join(projectDir, '.claude', 'settings.json') : null;
+  const projectMcpPath = projectDir ? join(projectDir, '.mcp.json') : null;
+  const projectLocal = projectLocalPath ? await readJsonSafe(projectLocalPath) : null;
+  const projectSettings = projectSettingsPath ? await readJsonSafe(projectSettingsPath) : null;
+  const projectMcp = projectMcpPath ? await readJsonSafe(projectMcpPath) : null;
+
+  // MCP servers: first occurrence of a name wins, ordered most-specific first
+  // (project local > project settings > project .mcp.json > user config).
+  interface McpSource {
+    config: Record<string, unknown> | null;
+    path: string;
   }
+  const mcpSources: McpSource[] = [];
+  if (projectLocalPath !== null) mcpSources.push({ config: projectLocal, path: projectLocalPath });
+  if (projectSettingsPath !== null)
+    mcpSources.push({ config: projectSettings, path: projectSettingsPath });
+  if (projectMcpPath !== null) mcpSources.push({ config: projectMcp, path: projectMcpPath });
+  mcpSources.push({ config: homeClaudeJson, path: homeClaudeJsonPath });
+  // ~/.claude.json also nests per-project servers under projects.<path>.mcpServers
+  const nestedProjects = asRecord(homeClaudeJson?.['projects'] ?? null);
+  if (nestedProjects !== null) {
+    for (const nested of Object.values(nestedProjects)) {
+      const record = asRecord(nested);
+      if (record !== null) mcpSources.push({ config: record, path: homeClaudeJsonPath });
+    }
+  }
+  mcpSources.push({ config: homeSettings, path: homeSettingsPath });
+
   const seenMcp = new Set<string>();
-  for (const source of configSources) {
-    const config = await readJsonSafe(source);
+  for (const { config, path } of mcpSources) {
     if (config === null) continue;
-    for (const item of mcpItems(config, source)) {
+    for (const item of mcpItems(config, path)) {
       if (seenMcp.has(item.name)) continue;
       seenMcp.add(item.name);
       items.push(item);
     }
-    items.push(...hookItems(config, source));
   }
+
+  // Hooks live in settings files only
+  items.push(...hookItems(homeSettings, homeSettingsPath));
+  if (projectSettingsPath !== null) items.push(...hookItems(projectSettings, projectSettingsPath));
+  if (projectLocalPath !== null) items.push(...hookItems(projectLocal, projectLocalPath));
 
   // Memory files: counted as context load, not classified (spec §4.1)
   const userMemory = await memoryItem(join(claudeDir, 'CLAUDE.md'), 'user');

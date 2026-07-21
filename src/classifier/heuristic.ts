@@ -19,7 +19,7 @@ const TERMS: Record<Axis, readonly string[]> = {
     'code', 'coding', 'review', 'reviews', 'reviewer', 'debug', 'debugging', 'refactor',
     'refactoring', 'bug', 'bugs', 'typescript', 'javascript', 'python', 'api', 'sdk',
     'frontend', 'backend', 'database', 'sql', 'security', 'maintainability', 'test',
-    'tests', 'testing', 'implementation', 'implement', 'compiler', 'github',
+    'tests', 'testing', 'implementation', 'implement', 'compiler', 'github', 'playwright',
   ],
   writing: [
     'write', 'writes', 'writing', 'writer', 'written', 'documentation', 'doc', 'docs',

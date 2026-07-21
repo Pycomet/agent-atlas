@@ -9,6 +9,23 @@
     "linear": {
       "type": "sse",
       "url": "https://mcp.linear.app/sse"
+    },
+    "grafana": {
+      "type": "http",
+      "url": "https://user-level-grafana.example.com/mcp"
+    }
+  },
+  "projects": {
+    "/Users/alfred/proj-a": {
+      "mcpServers": {
+        "playwright": {
+          "command": "npx",
+          "args": ["@playwright/mcp@latest"]
+        }
+      }
+    },
+    "/Users/alfred/proj-b": {
+      "hasTrustDialogAccepted": true
     }
   }
 }

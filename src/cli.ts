@@ -116,15 +116,18 @@ program
       (item) => item.kind !== 'memory' && (usage.items[item.id]?.count ?? 0) === 0,
     );
 
-    const axisCounts = new Map<Axis, number>();
+    // Same weighted math as the map's installed tuning bar — the two must agree.
+    const axisTotals = new Map<Axis, number>();
     for (const c of classification.items) {
-      axisCounts.set(c.primary, (axisCounts.get(c.primary) ?? 0) + 1);
+      for (const axis of AXES) {
+        axisTotals.set(axis, (axisTotals.get(axis) ?? 0) + (c.weights[axis] || 0));
+      }
     }
-    const classifiedTotal = classification.items.length;
-    const tuning = AXES.map((axis) => ({ axis, n: axisCounts.get(axis) ?? 0 }))
-      .filter(({ n }) => n > 0)
-      .sort((a, b) => b.n - a.n)
-      .map(({ axis, n }) => `${axis} ${Math.round((100 * n) / Math.max(1, classifiedTotal))}%`)
+    const classifiedTotal = Math.max(1, classification.items.length);
+    const tuning = AXES.map((axis) => ({ axis, share: (axisTotals.get(axis) ?? 0) / classifiedTotal }))
+      .filter(({ share }) => share >= 0.005)
+      .sort((a, b) => b.share - a.share)
+      .map(({ axis, share }) => `${axis} ${Math.round(100 * share)}%`)
       .join(' · ');
 
     const lines: string[] = [
