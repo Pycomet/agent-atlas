@@ -2,7 +2,7 @@
 
 **A map of your AI setup.** Agent Atlas scans your AI coding environment and turns it into an interactive mind map — so you can see, at a glance, what your agents and skills are actually good at, what you never use, and what's missing.
 
-<!-- screenshot: atlas map goes here once M3 lands -->
+![Agent Atlas mapping a real Claude Code setup — 103 capabilities clustered by what they're for, sized by usage, grey = never fired](docs/atlas-map.jpg)
 
 You've probably installed dozens of skills, subagents, and MCP servers into your AI tools. But do you actually know what your setup can do? Agent Atlas reads your configuration and your session history, then draws your whole stack as a living map: every skill, agent, and tool as a node, grouped by what it's for, sized by how often you actually use it.
 
@@ -48,7 +48,9 @@ installed)    fires)           piece is for)   diagnostics)
 1. **Scanner** — inventories skills, subagents, MCP servers, and hooks from your `~/.claude` configuration (plus the current project's `.claude/`).
 2. **Usage Miner** — streams your local session transcripts and counts what actually fired in the last 30 days (`--days` to change the window).
 3. **Classifier** — one cheap LLM pass scores every item across five capability axes: **engineering, writing, research, design, ops**. Results are cached by content hash, so re-runs are fast and nearly free. Got a classification wrong? Pin the right one in `~/.agent-atlas/overrides.json` — overrides always win.
-4. **Renderer** — draws the interactive map: clusters by capability, node size = usage, grey = dead weight, plus a "tuning bar" summarizing your whole stack (`Engineering 61% · Research 17% · …`).
+4. **Renderer** — draws the interactive map: clusters by capability, node size = usage, grey = dead weight, plus a "tuning bar" summarizing your whole stack (`Engineering 61% · Research 17% · …`). Below the map, three diagnostic lists: **dead weight** (with estimated tokens wasted per session), **overlaps** (near-duplicate skills/agents), and **gaps** (capability axes you barely cover). The "Share card" button exports a PNG:
+
+![The exported share card — headline stats, tuning bar, and map snapshot](docs/share-card.png)
 
 ## Usage
 
@@ -68,8 +70,8 @@ Classification uses your `ANTHROPIC_API_KEY` environment variable if set; otherw
 |---|---|---|
 | M1 | Scanner + Usage Miner (`--json` output) | ✅ done |
 | M2 | Classifier — LLM pass, cache, overrides, no-key fallback | ✅ done |
-| M3 | Renderer — interactive map + tuning bar (`atlas.html`) | 🔨 in progress |
-| M4 | Diagnostics (dead weight, overlaps, gaps) + shareable card | ⏳ next |
+| M3 | Renderer — interactive map + tuning bar (`atlas.html`) | ✅ done |
+| M4 | Diagnostics (dead weight, overlaps, gaps) + shareable card | ✅ done |
 | v2 | Adapters for Cursor, Codex CLI, Gemini CLI; recommendations | 💭 planned |
 
 The full design lives in [SPEC.md](SPEC.md).
