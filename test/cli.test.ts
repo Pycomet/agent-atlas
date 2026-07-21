@@ -23,6 +23,7 @@ const cleanEnv = (): NodeJS.ProcessEnv => {
   const env = { ...process.env };
   delete env['ANTHROPIC_API_KEY'];
   delete env['ANTHROPIC_AUTH_TOKEN'];
+  env['CI'] = '1'; // belt-and-braces: the CLI never opens a browser under CI
   return env;
 };
 
@@ -80,9 +81,37 @@ describe('agent-atlas CLI', () => {
   });
 
   it('prints a human summary without --json', () => {
-    const out = runCli('--home', HOME, '--project', PROJECT, '--days', '36500');
+    const out = runCli(
+      '--home', HOME, '--project', PROJECT, '--days', '36500',
+      '--atlas-dir', tmpAtlasDir(), '--out', join(tmpAtlasDir(), 'atlas.html'), '--no-open',
+    );
     expect(out).toContain('Agent Atlas');
     expect(out).toContain('sessions');
+  });
+
+  it('default run writes a self-contained atlas.html whose data matches --json', () => {
+    const atlasDir = tmpAtlasDir();
+    const outFile = join(tmpAtlasDir(), 'atlas.html');
+    const args = ['--home', HOME, '--project', PROJECT, '--days', '36500', '--atlas-dir', atlasDir];
+
+    const stdout = runCli(...args, '--out', outFile, '--no-open');
+    expect(stdout).toContain(outFile);
+
+    const html = readFileSync(outFile, 'utf8');
+    const match = /<script id="atlas-data" type="application\/json">([\s\S]*?)<\/script>/.exec(html);
+    expect(match).not.toBeNull();
+    const embedded = JSON.parse(match![1]!) as {
+      inventory: Inventory;
+      usage: Usage;
+      classification: ClassificationOutput;
+      days: number;
+    };
+
+    const jsonOut = JSON.parse(runCli('--json', ...args)) as CliJson;
+    expect(embedded.days).toBe(jsonOut.days);
+    expect(embedded.inventory).toEqual(jsonOut.inventory);
+    expect(embedded.usage).toEqual(jsonOut.usage);
+    expect(embedded.classification).toEqual(jsonOut.classification);
   });
 
   it('without an API key, --json includes heuristic classification matching the hand labels', () => {
@@ -139,14 +168,8 @@ describe('agent-atlas CLI', () => {
 
   it('labels rough mode in the human summary and prints a tuning line', () => {
     const out = runCli(
-      '--home',
-      HOME,
-      '--project',
-      PROJECT,
-      '--days',
-      '36500',
-      '--atlas-dir',
-      tmpAtlasDir(),
+      '--home', HOME, '--project', PROJECT, '--days', '36500',
+      '--atlas-dir', tmpAtlasDir(), '--out', join(tmpAtlasDir(), 'atlas.html'), '--no-open',
     );
     expect(out).toContain('Tuning');
     expect(out.toLowerCase()).toContain('rough mode');

@@ -70,6 +70,16 @@ export interface ClassificationOutput {
   items: Classification[];
 }
 
+/** Everything the renderer embeds into atlas.html (spec §4.4). */
+export interface AtlasData {
+  generatedAt: string;
+  days: number;
+  tool: string;
+  inventory: Inventory;
+  usage: Usage;
+  classification: ClassificationOutput;
+}
+
 export interface MineOptions {
   homeDir: string;
   /** Usage window in days (default 30). */
