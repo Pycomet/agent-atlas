@@ -52,7 +52,16 @@
   function renderTuning(mode) {
     const bar = document.getElementById('tuning-bar');
     bar.textContent = '';
-    const shares = tuningShares(mode) || tuningShares('installed');
+    // Empty setup: both modes yield null — render an empty state, never throw
+    // (an exception here would kill the whole page script).
+    const shares = tuningShares(mode) || tuningShares('installed') || [];
+    if (shares.length === 0) {
+      const empty = document.createElement('span');
+      empty.className = 'tune-empty';
+      empty.textContent = 'nothing classifiable yet — install a skill or agent and re-run';
+      bar.appendChild(empty);
+      return;
+    }
     for (const { axis, share } of shares) {
       if (share < 0.005) continue;
       const seg = document.createElement('div');

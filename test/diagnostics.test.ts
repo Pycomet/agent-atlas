@@ -9,6 +9,7 @@ import { diagnose } from '../src/diagnostics.js';
 import { mergeUsage, mineUsage } from '../src/miner.js';
 import { scan } from '../src/scanner.js';
 import type { ClassificationOutput, Inventory, Usage } from '../src/types.js';
+import { AXES } from '../src/types.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const HOME = join(ROOT, 'fixtures', 'home');
@@ -165,15 +166,42 @@ describe('diagnose — overlaps (spec §5.2)', () => {
 });
 
 describe('diagnose — gaps (spec §5.3)', () => {
-  it('flags axes under the 5% installed-share threshold', async () => {
+  it('reports exactly the axes whose installed share is under 5%', async () => {
     const report = await diagnose(inventory, usage, classification, 30);
-    const gapAxes = report.gaps.map((g) => g.axis);
-    expect(gapAxes).toContain('design'); // fixtures have no design-primary item
-    expect(gapAxes).not.toContain('ops');
-    expect(gapAxes).not.toContain('engineering');
+    const expectedGapAxes = AXES.filter(
+      (axis) =>
+        classification.items.reduce((sum, c) => sum + c.weights[axis], 0) /
+          classification.items.length <
+        0.05,
+    );
+    expect(report.gaps.map((g) => g.axis)).toEqual(expectedGapAxes);
     for (const gap of report.gaps) {
       expect(gap.installedShare).toBeLessThan(0.05);
       expect(gap.line.toLowerCase()).toContain(gap.axis);
     }
+  });
+
+  it('flags every missing axis with the spec wording on a lopsided setup', async () => {
+    const lopsided: ClassificationOutput = {
+      mode: 'heuristic',
+      items: [
+        {
+          itemId: 'skill:only-code',
+          weights: { engineering: 1, writing: 0, research: 0, design: 0, ops: 0 },
+          primary: 'engineering',
+          summary: '',
+          method: 'heuristic',
+          contentHash: 'x',
+        },
+      ],
+    };
+    const report = await diagnose(
+      { items: [] },
+      { totalSessions: 0, items: {} },
+      lopsided,
+      30,
+    );
+    expect(report.gaps.map((g) => g.axis)).toEqual(['writing', 'research', 'design', 'ops']);
+    expect(report.gaps[0]!.line).toContain('no writing-oriented');
   });
 });

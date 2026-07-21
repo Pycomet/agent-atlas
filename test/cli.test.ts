@@ -43,7 +43,7 @@ describe('agent-atlas CLI', () => {
     const parsed = JSON.parse(out) as CliJson;
 
     expect(parsed.days).toBe(36500);
-    expect(parsed.inventory.items).toHaveLength(15);
+    expect(parsed.inventory.items).toHaveLength(17);
     expect(parsed.usage.totalSessions).toBe(3);
 
     // Every inventory item has a usage entry (zero-filled when never fired).

@@ -16,6 +16,12 @@ const mcpEntrySize = (configFile: string, server: string): number => {
   };
   return Buffer.byteLength(JSON.stringify(config.mcpServers[server]), 'utf8');
 };
+const nestedMcpEntrySize = (configFile: string, projectPath: string, server: string): number => {
+  const config = JSON.parse(readFileSync(configFile, 'utf8')) as {
+    projects: Record<string, { mcpServers: Record<string, unknown> }>;
+  };
+  return Buffer.byteLength(JSON.stringify(config.projects[projectPath]!.mcpServers[server]), 'utf8');
+};
 
 describe('scan', () => {
   it('produces the full golden inventory for the fixture tree', async () => {
@@ -53,7 +59,8 @@ describe('scan', () => {
         id: 'hook:PostToolUse:Bash',
         kind: 'hook',
         name: 'PostToolUse(Bash)',
-        description: "echo 'bash done' >> ~/.claude/hook.log",
+        // Never the raw command — commands can hold secrets and descriptions reach the API.
+        description: 'PostToolUse hook (Bash)',
         sourcePath: join(HOME, '.claude', 'settings.json'),
         sizeBytes: Buffer.byteLength(
           JSON.stringify({ type: 'command', command: "echo 'bash done' >> ~/.claude/hook.log" }),
@@ -67,7 +74,7 @@ describe('scan', () => {
         id: 'hook:SessionStart:*',
         kind: 'hook',
         name: 'SessionStart(*)',
-        description: './scripts/load-context.sh',
+        description: 'SessionStart hook (*)',
         sourcePath: join(PROJECT, '.claude', 'settings.local.json'),
         sizeBytes: Buffer.byteLength(
           JSON.stringify({ type: 'command', command: './scripts/load-context.sh' }),
@@ -102,6 +109,15 @@ describe('scan', () => {
         description: null,
         sourcePath: join(HOME, '.claude.json'),
         sizeBytes: mcpEntrySize(join(HOME, '.claude.json'), 'notion'),
+        transport: 'stdio',
+      },
+      {
+        id: 'mcp:playwright',
+        kind: 'mcp',
+        name: 'playwright',
+        description: null,
+        sourcePath: join(HOME, '.claude.json'),
+        sizeBytes: nestedMcpEntrySize(join(HOME, '.claude.json'), '/Users/alfred/proj-a', 'playwright'),
         transport: 'stdio',
       },
       {
@@ -145,6 +161,22 @@ describe('scan', () => {
         description: 'Pre-deploy checklist for this project.',
         sourcePath: join(PROJECT, '.claude', 'skills', 'deploy-checklist', 'SKILL.md'),
         sizeBytes: fileSize(join(PROJECT, '.claude', 'skills', 'deploy-checklist', 'SKILL.md')),
+      },
+      {
+        id: 'skill:frontend-design:frontend-design',
+        kind: 'skill',
+        name: 'frontend-design:frontend-design',
+        description: 'Distinctive visual design and typography guidance.',
+        sourcePath: join(
+          HOME, '.claude', 'plugins', 'cache', 'acme', 'frontend-design', 'unknown',
+          'skills', 'frontend-design', 'SKILL.md',
+        ),
+        sizeBytes: fileSize(
+          join(
+            HOME, '.claude', 'plugins', 'cache', 'acme', 'frontend-design', 'unknown',
+            'skills', 'frontend-design', 'SKILL.md',
+          ),
+        ),
       },
       {
         id: 'skill:git-workflow',
@@ -204,6 +236,21 @@ describe('scan', () => {
     const ids = inventory.items.map((i) => i.id);
     expect(ids).toContain('skill:git-workflow');
     expect(ids).not.toContain('agent:proposal-agent');
-    expect(ids).not.toContain('mcp:grafana');
+    // grafana exists at user level too — without a project it comes from ~/.claude.json
+    const grafana = inventory.items.find((i) => i.id === 'mcp:grafana');
+    expect(grafana?.sourcePath).toBe(join(HOME, '.claude.json'));
+  });
+
+  it('project config wins the MCP name collision (grafana defined at both levels)', async () => {
+    const inventory = await scan({ homeDir: HOME, projectDir: PROJECT });
+    const grafana = inventory.items.filter((i) => i.name === 'grafana');
+    expect(grafana).toHaveLength(1);
+    expect(grafana[0]!.sourcePath).toBe(join(PROJECT, '.mcp.json'));
+  });
+
+  it('never inventories plugin-internal dot-directory skills', async () => {
+    const inventory = await scan({ homeDir: HOME, projectDir: PROJECT });
+    const junk = inventory.items.filter((i) => i.name.includes('junk-dev-skill'));
+    expect(junk).toEqual([]);
   });
 });

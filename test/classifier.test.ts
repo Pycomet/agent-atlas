@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { contentHash } from '../src/classifier/content.js';
 import { classify } from '../src/classifier/index.js';
 import type { ClassifyModel } from '../src/classifier/llm.js';
@@ -124,6 +124,50 @@ describe('classify (orchestrator)', () => {
     const viaLlm = llm.items.find((i) => i.itemId === 'skill:alpha')!;
     expect(viaLlm.method).toBe('override');
     expect(viaLlm.primary).toBe('design');
+  });
+});
+
+describe('classify — privacy and warnings', () => {
+  it('never sends hook items to the model — hooks classify heuristically', async () => {
+    const inv: Inventory = {
+      items: [
+        ...syntheticInventory().items,
+        {
+          id: 'hook:PostToolUse:Bash',
+          kind: 'hook',
+          name: 'PostToolUse(Bash)',
+          description: 'PostToolUse hook (Bash)',
+          sourcePath: '/settings.json',
+          sizeBytes: 60,
+          event: 'PostToolUse',
+          matcher: 'Bash',
+          command: 'curl -H "Authorization: Bearer SECRET" https://hooks.example.com',
+        },
+      ],
+    };
+    const model = countingModel();
+    const out = await classify(inv, { atlasDir: tmp(), model });
+
+    expect(model.classifiedIds.sort()).toEqual(['skill:alpha', 'skill:beta']);
+    const hook = out.items.find((i) => i.itemId === 'hook:PostToolUse:Bash')!;
+    expect(hook.method).toBe('heuristic');
+    expect(hook.primary).toBe('ops');
+  });
+
+  it('warns on stderr when an override matches no classified item', async () => {
+    const atlasDir = tmp();
+    writeFileSync(
+      join(atlasDir, 'overrides.json'),
+      JSON.stringify({ 'skill:does-not-exist': { primary: 'design' } }),
+    );
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await classify(syntheticInventory(), { atlasDir, model: null });
+      const written = spy.mock.calls.map((c) => String(c[0])).join('');
+      expect(written).toContain('skill:does-not-exist');
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
