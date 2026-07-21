@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { classify } from '../src/classifier/index.js';
+import { diagnose } from '../src/diagnostics.js';
 import { mergeUsage, mineUsage } from '../src/miner.js';
 import { renderAtlas } from '../src/renderer/index.js';
 import { scan } from '../src/scanner.js';
@@ -31,6 +32,7 @@ beforeAll(async () => {
     atlasDir: mkdtempSync(join(tmpdir(), 'agent-atlas-render-test-')),
     model: null,
   });
+  const diagnostics = await diagnose(inventory, usage, classification, 30);
   fixtureData = {
     generatedAt: '2026-07-21T00:00:00.000Z',
     days: 30,
@@ -38,6 +40,7 @@ beforeAll(async () => {
     inventory,
     usage,
     classification,
+    diagnostics,
   };
 });
 
@@ -59,6 +62,15 @@ describe('renderAtlas', () => {
     for (const marker of ['id="map"', 'id="tuning-bar"', 'id="detail-panel"', 'id="filters"']) {
       expect(html).toContain(marker);
     }
+  });
+
+  it('contains the diagnostics section and the share-card button', async () => {
+    const html = await renderAtlas(fixtureData);
+    for (const marker of ['id="diagnostics"', 'id="diag-dead"', 'id="diag-overlaps"', 'id="diag-gaps"', 'id="share-btn"']) {
+      expect(html).toContain(marker);
+    }
+    const embedded = extractEmbedded(html) as AtlasData;
+    expect(embedded.diagnostics.deadWeight.length).toBeGreaterThan(0);
   });
 
   it('cannot be broken out of via a hostile item description', async () => {

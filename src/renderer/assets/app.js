@@ -112,12 +112,28 @@
   const gNodes = svg.append('g');
 
   const linkSel = gLinks
-    .selectAll('line')
+    .selectAll('line.hub')
     .data(nodes)
     .join('line')
+    .attr('class', 'hub')
     .attr('stroke', (n) => AXIS_COLOR[n.cls.primary])
     .attr('stroke-opacity', 0.13)
     .attr('stroke-width', 1);
+
+  // Dashed edges between suspected-duplicate pairs (spec §4.4)
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const overlapPairs = data.diagnostics.overlaps
+    .map((o) => ({ a: nodeById.get(o.itemIds[0]), b: nodeById.get(o.itemIds[1]) }))
+    .filter((p) => p.a && p.b);
+  const overlapSel = gLinks
+    .selectAll('line.overlap')
+    .data(overlapPairs)
+    .join('line')
+    .attr('class', 'overlap')
+    .attr('stroke', '#a9b2c3')
+    .attr('stroke-opacity', 0.55)
+    .attr('stroke-width', 1.2)
+    .attr('stroke-dasharray', '5 4');
 
   for (const a of AXES) {
     const h = hubPos[a];
@@ -175,6 +191,11 @@
       .attr('y1', (n) => n.y)
       .attr('x2', (n) => hubPos[n.cls.primary].x)
       .attr('y2', (n) => hubPos[n.cls.primary].y);
+    overlapSel
+      .attr('x1', (p) => p.a.x)
+      .attr('y1', (p) => p.a.y)
+      .attr('x2', (p) => p.b.x)
+      .attr('y2', (p) => p.b.y);
   }
 
   const sim = d3
@@ -384,6 +405,220 @@
     nodeSel.attr('display', (n) => (visible(n) ? null : 'none'));
     labelSel.attr('display', (n) => (visible(n) ? null : 'none'));
     linkSel.attr('display', (n) => (visible(n) ? null : 'none'));
+    overlapSel.attr('display', (p) => (visible(p.a) && visible(p.b) ? null : 'none'));
     panel.hidden = true;
   }
+
+  /* ---------- diagnostics lists (spec §5) ---------- */
+  // Backtick-quoted spans in finding lines render as <code>; all via textContent.
+  function lineInto(li, line) {
+    const parts = line.split('`');
+    parts.forEach((part, i) => {
+      if (part === '') return;
+      if (i % 2 === 1) {
+        const code = document.createElement('code');
+        code.textContent = part;
+        li.append(code);
+      } else {
+        li.append(document.createTextNode(part));
+      }
+    });
+  }
+
+  function fillList(colId, findings, opts) {
+    const list = document.querySelector('#' + colId + ' .diag-list');
+    const max = (opts && opts.max) || findings.length;
+    if (findings.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = (opts && opts.emptyText) || 'None found.';
+      list.append(li);
+      return;
+    }
+    for (const finding of findings.slice(0, max)) {
+      const li = document.createElement('li');
+      lineInto(li, finding.line);
+      const nodeId = finding.itemId || (finding.itemIds && finding.itemIds[0]);
+      const node = nodeId ? nodeById.get(nodeId) : undefined;
+      if (node) {
+        li.className = 'clickable';
+        li.addEventListener('click', () => {
+          showPanel(node);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
+      list.append(li);
+    }
+    if (findings.length > max) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = '… and ' + (findings.length - max) + ' more (see --json for all).';
+      list.append(li);
+    }
+  }
+
+  fillList('diag-dead', data.diagnostics.deadWeight, {
+    max: 12,
+    emptyText: 'Nothing unused — everything installed fired in this window.',
+  });
+  fillList('diag-overlaps', data.diagnostics.overlaps, {
+    emptyText: 'No suspected duplicates.',
+  });
+  fillList('diag-gaps', data.diagnostics.gaps, {
+    emptyText: 'No gaps — every axis has real coverage.',
+  });
+
+  /* ---------- share card (spec §4.4 — in-page PNG export, zero deps) ---------- */
+  const shareBtn = document.getElementById('share-btn');
+
+  function mapSnapshot() {
+    return new Promise((resolveSnap) => {
+      const clone = svg.node().cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width', String(W));
+      clone.setAttribute('height', String(H));
+      const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      style.textContent =
+        '.hub-label{font:12px ui-monospace,Menlo,monospace;letter-spacing:.22em;text-anchor:middle}' +
+        '.node-label{font:10.5px ui-monospace,Menlo,monospace;fill:#a9b2c3;text-anchor:middle}';
+      clone.insertBefore(style, clone.firstChild);
+      const url = URL.createObjectURL(
+        new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }),
+      );
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolveSnap(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolveSnap(null);
+      };
+      img.src = url;
+    });
+  }
+
+  async function exportShareCard() {
+    shareBtn.disabled = true;
+    try {
+      const SCALE = 2;
+      const CW = 1200;
+      const CH = 630;
+      const canvas = document.createElement('canvas');
+      canvas.width = CW * SCALE;
+      canvas.height = CH * SCALE;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(SCALE, SCALE);
+
+      const MONO = 'ui-monospace, Menlo, monospace';
+      const SERIF = '"Iowan Old Style", Palatino, Georgia, serif';
+
+      ctx.fillStyle = '#0b0e15';
+      ctx.fillRect(0, 0, CW, CH);
+
+      // right: map snapshot on the chart surface
+      const snap = await mapSnapshot();
+      const mapX = 560;
+      ctx.fillStyle = SURFACE;
+      ctx.fillRect(mapX, 0, CW - mapX, CH);
+      if (snap) {
+        const scale = Math.max((CW - mapX) / W, CH / H);
+        const dw = W * scale;
+        const dh = H * scale;
+        ctx.drawImage(snap, mapX + (CW - mapX - dw) / 2, (CH - dh) / 2, dw, dh);
+      }
+
+      // left column
+      const L = 56;
+      ctx.fillStyle = '#eef1f7';
+      ctx.font = 'italic 46px ' + SERIF;
+      ctx.fillText('Agent Atlas', L, 92);
+      ctx.font = '11px ' + MONO;
+      ctx.fillStyle = '#6f7a8d';
+      ctx.fillText(
+        (data.tool + ' · last ' + data.days + ' days').toUpperCase(),
+        L,
+        116,
+      );
+
+      // headline stats
+      const neverUsed = data.diagnostics.deadWeight.length;
+      const stats = [
+        [String(nodes.length), 'capabilities'],
+        [String(data.usage.totalSessions), 'sessions'],
+        [String(neverUsed), 'never used'],
+      ];
+      stats.forEach(([value, label], i) => {
+        const x = L + i * 155;
+        ctx.fillStyle = '#eef1f7';
+        ctx.font = '600 40px ' + MONO;
+        ctx.fillText(value, x, 196);
+        ctx.fillStyle = '#6f7a8d';
+        ctx.font = '10px ' + MONO;
+        ctx.fillText(label.toUpperCase(), x, 216);
+      });
+
+      // tuning bar
+      const shares = tuningShares(tuneMode) || tuningShares('installed') || [];
+      const barY = 256;
+      const barW = 448;
+      let x = L;
+      for (const s of shares) {
+        const w = Math.max(4, s.share * barW - 2);
+        ctx.fillStyle = AXIS_COLOR[s.axis];
+        ctx.beginPath();
+        ctx.roundRect(x, barY, w, 20, 3);
+        ctx.fill();
+        x += w + 2;
+      }
+      let lx = L;
+      ctx.font = '10px ' + MONO;
+      for (const s of shares) {
+        if (s.share < 0.04) continue;
+        ctx.fillStyle = AXIS_COLOR[s.axis];
+        ctx.fillText(s.axis + ' ' + Math.round(s.share * 100) + '%', lx, barY + 38);
+        lx += ctx.measureText(s.axis + ' 00% ').width + 14;
+      }
+
+      // top dead-weight line, wrapped
+      const topDead = data.diagnostics.deadWeight[0];
+      if (topDead) {
+        ctx.fillStyle = '#a9b2c3';
+        ctx.font = '13px ' + MONO;
+        const words = topDead.line.replace(/`/g, '').split(' ');
+        let lineText = '';
+        let y = barY + 84;
+        for (const word of words) {
+          const probe = lineText === '' ? word : lineText + ' ' + word;
+          if (ctx.measureText(probe).width > 448 && lineText !== '') {
+            ctx.fillText(lineText, L, y);
+            y += 20;
+            lineText = word;
+          } else {
+            lineText = probe;
+          }
+        }
+        if (lineText !== '') ctx.fillText(lineText, L, y);
+      }
+
+      ctx.fillStyle = '#6f7a8d';
+      ctx.font = '12px ' + MONO;
+      ctx.fillText('npx agent-atlas', L, CH - 44);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'agent-atlas.png';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        }
+        shareBtn.disabled = false;
+      }, 'image/png');
+    } catch (err) {
+      shareBtn.disabled = false;
+    }
+  }
+
+  shareBtn.addEventListener('click', exportShareCard);
 })();

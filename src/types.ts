@@ -70,6 +70,37 @@ export interface ClassificationOutput {
   items: Classification[];
 }
 
+export interface DeadWeightFinding {
+  itemId: string;
+  kind: ItemKind;
+  sizeBytes: number;
+  /** Rough context cost (bytes ÷ 4); null when the item occupies no context (hooks). */
+  estTokensPerSession: number | null;
+  estTokensTotal: number | null;
+  /** MCP figures are config-size lower bounds — real tool schemas are far larger (spec §5 deviation). */
+  estimateBasis: 'description' | 'config-lower-bound' | null;
+  line: string;
+}
+
+export interface OverlapFinding {
+  itemIds: [string, string];
+  weightCosine: number;
+  method: 'heuristic' | 'llm';
+  line: string;
+}
+
+export interface GapFinding {
+  axis: Axis;
+  installedShare: number;
+  line: string;
+}
+
+export interface DiagnosticsReport {
+  deadWeight: DeadWeightFinding[];
+  overlaps: OverlapFinding[];
+  gaps: GapFinding[];
+}
+
 /** Everything the renderer embeds into atlas.html (spec §4.4). */
 export interface AtlasData {
   generatedAt: string;
@@ -78,6 +109,7 @@ export interface AtlasData {
   inventory: Inventory;
   usage: Usage;
   classification: ClassificationOutput;
+  diagnostics: DiagnosticsReport;
 }
 
 export interface MineOptions {
