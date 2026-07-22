@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parse as parseToml } from 'smol-toml';
 import type { ToolAdapter } from '../adapter.js';
+import { mcpIdentity } from '../scanner.js';
 import type { Inventory, InventoryItem, McpTransport, Usage, UsageEntry } from '../types.js';
 import {
   dirExists,
@@ -50,7 +51,7 @@ async function scanCodex(homeDir: string, projectDir?: string): Promise<Inventor
       for (const [name, raw] of Object.entries(servers)) {
         const server = asRecord(raw);
         if (server === null) continue;
-        items.push({
+        const item: InventoryItem = {
           id: `mcp:${name}`,
           kind: 'mcp',
           name,
@@ -58,7 +59,10 @@ async function scanCodex(homeDir: string, projectDir?: string): Promise<Inventor
           sourcePath: configPath,
           sizeBytes: Buffer.byteLength(JSON.stringify(server), 'utf8'),
           transport: transportOf(server),
-        });
+        };
+        const identity = mcpIdentity(server);
+        if (identity !== null) item.identity = identity;
+        items.push(item);
       }
     }
   }

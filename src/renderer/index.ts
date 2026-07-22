@@ -66,6 +66,7 @@ export async function renderAtlas(data: AtlasData): Promise<string> {
       <div class="seg-toggle">
         <button id="toggle-used" class="seg" type="button">used</button>
         <button id="toggle-installed" class="seg" type="button">installed</button>
+        <button id="toggle-bytool" class="seg" type="button">by tool</button>
       </div>
       ${roughBadge}
     </div>
@@ -100,6 +101,20 @@ export async function renderAtlas(data: AtlasData): Promise<string> {
     </div>
     <div class="diag-col" id="diag-gaps">
       <h3 class="mapkey-title">Gaps</h3>
+      <ol class="diag-list"></ol>
+    </div>
+  </div>
+  <div class="diag-cols" id="crosstool" hidden>
+    <div class="diag-col" id="diag-xtool-dupes">
+      <h3 class="mapkey-title">Cross-tool duplicates</h3>
+      <ol class="diag-list"></ol>
+    </div>
+    <div class="diag-col" id="diag-xtool-imbalance">
+      <h3 class="mapkey-title">Capability imbalance</h3>
+      <ol class="diag-list"></ol>
+    </div>
+    <div class="diag-col" id="diag-xtool-rules">
+      <h3 class="mapkey-title">Rules files</h3>
       <ol class="diag-list"></ol>
     </div>
   </div>

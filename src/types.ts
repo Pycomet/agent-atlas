@@ -18,6 +18,8 @@ export interface InventoryItem {
   tools?: string[];
   /** MCP servers only. */
   transport?: McpTransport;
+  /** MCP servers only: normalized command/url identity for cross-tool duplicate matching. */
+  identity?: string;
   /** Hooks only. */
   event?: string;
   matcher?: string;
@@ -118,6 +120,34 @@ export interface DiagnosticsReport {
   gaps: GapFinding[];
 }
 
+/** Cross-tool diagnostics (SPEC_V2 §4.5). */
+export interface CrossToolDuplicate {
+  /** Normalized MCP identity shared by the items. */
+  key: string;
+  itemIds: string[];
+  /** Tools where this server actually fired (omitted claim when no owner has usage data). */
+  usedIn: string[];
+  line: string;
+}
+
+export interface CapabilityImbalance {
+  axis: Axis;
+  concentratedIn: string;
+  share: number;
+  line: string;
+}
+
+export interface RulesOverlap {
+  itemIds: string[];
+  line: string;
+}
+
+export interface CrossToolReport {
+  duplicates: CrossToolDuplicate[];
+  imbalance: CapabilityImbalance[];
+  rulesOverlaps: RulesOverlap[];
+}
+
 /** Per-tool metadata surfaced in --json and embedded in atlas.html (SPEC_V2 §5). */
 export interface ToolMeta {
   name: string;
@@ -136,6 +166,7 @@ export interface AtlasData {
   usage: Usage;
   classification: ClassificationOutput;
   diagnostics: DiagnosticsReport;
+  crossTool: CrossToolReport;
 }
 
 export interface MineOptions {

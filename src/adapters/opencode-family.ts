@@ -2,6 +2,7 @@ import { copyFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ToolAdapter } from '../adapter.js';
+import { mcpIdentity } from '../scanner.js';
 import type { Inventory, InventoryItem, Usage, UsageEntry } from '../types.js';
 import {
   NO_USAGE,
@@ -123,14 +124,19 @@ async function scanOpencode(paths: OpencodePaths, projectDir?: string): Promise<
         if (entry === null) continue;
         const description =
           typeof entry['description'] === 'string' ? entry['description'] : null;
-        items.push({
+        const item: InventoryItem = {
           id: `${kind}:${name}`,
           kind,
           name,
           description,
           sourcePath: configPath,
           sizeBytes: Buffer.byteLength(JSON.stringify(entry), 'utf8'),
-        });
+        };
+        if (kind === 'mcp') {
+          const identity = mcpIdentity(entry);
+          if (identity !== null) item.identity = identity;
+        }
+        items.push(item);
       }
     }
   }

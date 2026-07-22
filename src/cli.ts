@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { adapters, detectAdapters } from './adapter.js';
 import { createAnthropicModel } from './classifier/anthropic-model.js';
 import { classify } from './classifier/index.js';
+import { crossToolDiagnose } from './cross-tool.js';
 import { diagnose } from './diagnostics.js';
 import { mergeUsage } from './miner.js';
 import { renderAtlas } from './renderer/index.js';
@@ -126,10 +127,11 @@ program
     const model = useLlm ? createAnthropicModel() : null;
     const classification = await classify(inventory, { atlasDir, model });
     const diagnostics = await diagnose(inventory, usage, classification, days, { model });
+    const crossTool = crossToolDiagnose(inventory, usage, classification, tools);
 
     if (opts.json === true) {
       process.stdout.write(
-        `${JSON.stringify({ days, tools, inventory, usage, classification, diagnostics }, null, 2)}\n`,
+        `${JSON.stringify({ days, tools, inventory, usage, classification, diagnostics, crossTool }, null, 2)}\n`,
       );
       return;
     }
@@ -143,6 +145,7 @@ program
       usage,
       classification,
       diagnostics,
+      crossTool,
     });
     const outPath = resolve(opts.out);
     await fs.writeFile(outPath, html);
@@ -208,6 +211,12 @@ program
     }
     if (diagnostics.gaps.length > 0) {
       lines.push(`Gaps: no real coverage for ${diagnostics.gaps.map((g) => g.axis).join(', ')}`);
+    }
+    if (crossTool.duplicates.length > 0) {
+      lines.push(`Cross-tool: ${crossTool.duplicates[0]?.line ?? ''}`);
+    }
+    for (const finding of crossTool.imbalance.slice(0, 2)) {
+      lines.push(`Cross-tool: ${finding.line}`);
     }
     lines.push('');
     lines.push(`Map written to ${outPath}${shouldOpen ? ' (opening in browser)' : ''}`);

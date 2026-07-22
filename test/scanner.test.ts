@@ -92,6 +92,7 @@ describe('scan', () => {
         sourcePath: join(PROJECT, '.mcp.json'),
         sizeBytes: mcpEntrySize(join(PROJECT, '.mcp.json'), 'grafana'),
         transport: 'http',
+        identity: 'url:grafana.example.com/mcp',
       },
       {
         id: 'mcp:linear',
@@ -101,6 +102,7 @@ describe('scan', () => {
         sourcePath: join(HOME, '.claude.json'),
         sizeBytes: mcpEntrySize(join(HOME, '.claude.json'), 'linear'),
         transport: 'sse',
+        identity: 'url:mcp.linear.app/sse',
       },
       {
         id: 'mcp:notion',
@@ -110,6 +112,7 @@ describe('scan', () => {
         sourcePath: join(HOME, '.claude.json'),
         sizeBytes: mcpEntrySize(join(HOME, '.claude.json'), 'notion'),
         transport: 'stdio',
+        identity: 'cmd:npx -y @notionhq/notion-mcp-server',
       },
       {
         id: 'mcp:playwright',
@@ -119,6 +122,7 @@ describe('scan', () => {
         sourcePath: join(HOME, '.claude.json'),
         sizeBytes: nestedMcpEntrySize(join(HOME, '.claude.json'), '/Users/alfred/proj-a', 'playwright'),
         transport: 'stdio',
+        identity: 'cmd:npx @playwright/mcp@*',
       },
       {
         id: 'memory:project:CLAUDE.md',

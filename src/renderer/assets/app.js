@@ -49,10 +49,10 @@
     });
 
   /* ---------- tuning bar ---------- */
-  function tuningShares(mode) {
+  function tuningShares(mode, subset) {
     const totals = Object.fromEntries(AXES.map((a) => [a, 0]));
     let denom = 0;
-    for (const n of nodes) {
+    for (const n of subset || nodes) {
       const w = mode === 'used' ? n.usage.count : 1;
       if (w === 0) continue;
       denom += w;
@@ -61,19 +61,7 @@
     return denom === 0 ? null : AXES.map((a) => ({ axis: a, share: totals[a] / denom }));
   }
 
-  function renderTuning(mode) {
-    const bar = document.getElementById('tuning-bar');
-    bar.textContent = '';
-    // Empty setup: both modes yield null — render an empty state, never throw
-    // (an exception here would kill the whole page script).
-    const shares = tuningShares(mode) || tuningShares('installed') || [];
-    if (shares.length === 0) {
-      const empty = document.createElement('span');
-      empty.className = 'tune-empty';
-      empty.textContent = 'nothing classifiable yet — install a skill or agent and re-run';
-      bar.appendChild(empty);
-      return;
-    }
+  function segRow(shares, container) {
     for (const { axis, share } of shares) {
       if (share < 0.005) continue;
       const seg = document.createElement('div');
@@ -85,13 +73,62 @@
       lbl.className = 'tune-lbl';
       lbl.textContent = axis + ' ' + Math.round(share * 100) + '%';
       seg.appendChild(lbl);
-      bar.appendChild(seg);
+      container.appendChild(seg);
     }
+  }
+
+  /* Per-tool mini bars — "Cursor is all engineering, Claude Code carries the
+     writing" in one glance (SPEC_V2 §4.4). Installed weights: usage-less
+     tools must render honestly here too. */
+  function renderTuningByTool() {
+    const bar = document.getElementById('tuning-bar');
+    bar.textContent = '';
+    bar.classList.add('by-tool');
+    const present = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))];
+    for (const toolName of present) {
+      const subset = nodes.filter((n) => n.item.tool === toolName);
+      const shares = tuningShares('installed', subset);
+      if (shares === null) continue;
+      const row = document.createElement('div');
+      row.className = 'tune-tool-row';
+      const meta = toolMeta.get(toolName);
+      const label = document.createElement('span');
+      label.className = 'tune-tool-label';
+      label.style.color = meta !== undefined ? meta.color : '#8a93a6';
+      label.textContent = meta !== undefined ? meta.displayName : toolName;
+      const mini = document.createElement('div');
+      mini.className = 'tune-mini';
+      segRow(shares, mini);
+      row.append(label, mini);
+      bar.appendChild(row);
+    }
+  }
+
+  function renderTuning(mode) {
+    const bar = document.getElementById('tuning-bar');
+    bar.classList.remove('by-tool');
+    bar.textContent = '';
+    if (mode === 'bytool') {
+      renderTuningByTool();
+      return;
+    }
+    // Empty setup: both modes yield null — render an empty state, never throw
+    // (an exception here would kill the whole page script).
+    const shares = tuningShares(mode) || tuningShares('installed') || [];
+    if (shares.length === 0) {
+      const empty = document.createElement('span');
+      empty.className = 'tune-empty';
+      empty.textContent = 'nothing classifiable yet — install a skill or agent and re-run';
+      bar.appendChild(empty);
+      return;
+    }
+    segRow(shares, bar);
   }
 
   const totalUse = nodes.reduce((s, n) => s + n.usage.count, 0);
   const btnUsed = document.getElementById('toggle-used');
   const btnInstalled = document.getElementById('toggle-installed');
+  const btnByTool = document.getElementById('toggle-bytool');
   let tuneMode = 'used';
   if (totalUse === 0) {
     btnUsed.disabled = true;
@@ -102,10 +139,16 @@
     tuneMode = mode;
     btnUsed.classList.toggle('on', mode === 'used');
     btnInstalled.classList.toggle('on', mode === 'installed');
+    if (btnByTool !== null) btnByTool.classList.toggle('on', mode === 'bytool');
     renderTuning(mode);
   }
   btnUsed.addEventListener('click', () => setTuneMode('used'));
   btnInstalled.addEventListener('click', () => setTuneMode('installed'));
+  if (btnByTool !== null) {
+    const multiTool = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))].length > 1;
+    if (multiTool) btnByTool.addEventListener('click', () => setTuneMode('bytool'));
+    else btnByTool.hidden = true;
+  }
   setTuneMode(tuneMode);
 
   /* ---------- map ---------- */
@@ -529,6 +572,23 @@
   fillList('diag-gaps', data.diagnostics.gaps, {
     emptyText: 'No gaps — every axis has real coverage.',
   });
+
+  /* ---------- cross-tool diagnostics (SPEC_V2 §4.5) ---------- */
+  const crossTool = data.crossTool || { duplicates: [], imbalance: [], rulesOverlaps: [] };
+  const crossSection = document.getElementById('crosstool');
+  const multiToolMap = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))].length > 1;
+  if (crossSection !== null && multiToolMap) {
+    crossSection.hidden = false;
+    fillList('diag-xtool-dupes', crossTool.duplicates, {
+      emptyText: 'No MCP server is installed in more than one tool.',
+    });
+    fillList('diag-xtool-imbalance', crossTool.imbalance, {
+      emptyText: 'Capabilities are spread across your tools.',
+    });
+    fillList('diag-xtool-rules', crossTool.rulesOverlaps, {
+      emptyText: 'No overlapping rules files across tools.',
+    });
+  }
 
   /* ---------- share card (spec §4.4 — in-page PNG export, zero deps) ---------- */
   const shareBtn = document.getElementById('share-btn');
