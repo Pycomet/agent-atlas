@@ -1,5 +1,5 @@
 /** Kinds of items Agent Atlas tracks. Sorted alphabetically in output. */
-export type ItemKind = 'agent' | 'hook' | 'mcp' | 'memory' | 'skill';
+export type ItemKind = 'agent' | 'command' | 'hook' | 'mcp' | 'memory' | 'skill';
 
 export type McpTransport = 'stdio' | 'sse' | 'http' | 'unknown';
 

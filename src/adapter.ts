@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { codexAdapter } from './adapters/codex.js';
 import { cursorAdapter } from './adapters/cursor.js';
+import { opencodeAdapter, orgnCdeAdapter } from './adapters/opencode-family.js';
 import { dirExists, prefixInventory, prefixUsage } from './adapters/shared.js';
 import { mineUsage } from './miner.js';
 import { scan } from './scanner.js';
@@ -36,7 +37,13 @@ export const claudeCodeAdapter: ToolAdapter = {
     ),
 };
 
-export const adapters: ToolAdapter[] = [claudeCodeAdapter, codexAdapter, cursorAdapter];
+export const adapters: ToolAdapter[] = [
+  claudeCodeAdapter,
+  codexAdapter,
+  cursorAdapter,
+  orgnCdeAdapter,
+  opencodeAdapter,
+];
 
 export async function detectAdapters(ctx: AdapterContext): Promise<ToolAdapter[]> {
   const flags = await Promise.all(adapters.map((adapter) => adapter.detect(ctx)));
