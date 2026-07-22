@@ -15,7 +15,7 @@ In one picture you can answer questions you currently can't:
 ## Quick start
 
 ```bash
-npx agentatlas
+npx agent-atlas-cli
 ```
 
 That's it. No config, no account. Works on **Claude Code** setups today (Cursor and friends are on the roadmap — the scanner is built behind an adapter interface).
@@ -23,7 +23,7 @@ That's it. No config, no account. Works on **Claude Code** setups today (Cursor 
 Don't have an Anthropic API key handy? It still works:
 
 ```bash
-npx agentatlas --rough   # keyword-based classification, no API call at all
+npx agent-atlas-cli --rough   # keyword-based classification, no API call at all
 ```
 
 ## Privacy — read this part
@@ -55,11 +55,11 @@ installed)    fires)           piece is for)   diagnostics)
 ## Usage
 
 ```bash
-npx agentatlas                  # scan, classify, open the map
-npx agentatlas --json           # dump inventory + usage + classification as JSON
-npx agentatlas --days 90        # widen the usage window
-npx agentatlas --rough          # skip the API, use keyword heuristics
-npx agentatlas --atlas-dir DIR  # custom location for cache + overrides
+npx agent-atlas-cli                  # scan, classify, open the map
+npx agent-atlas-cli --json           # dump inventory + usage + classification as JSON
+npx agent-atlas-cli --days 90        # widen the usage window
+npx agent-atlas-cli --rough          # skip the API, use keyword heuristics
+npx agent-atlas-cli --atlas-dir DIR  # custom location for cache + overrides
 ```
 
 Classification uses your `ANTHROPIC_API_KEY` environment variable if set; otherwise it falls back to rough mode automatically.

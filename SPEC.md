@@ -24,7 +24,7 @@ Prior-art check (July 2026) confirmed nobody has built this: existing tools do t
 ## 3. What v1 does (user experience)
 
 ```
-npx agentatlas
+npx agent-atlas-cli
 ```
 
 That's the whole product. It:
@@ -122,11 +122,11 @@ v1 stops at *reporting*. It does not auto-uninstall, auto-install, or recommend 
 
 ## 6. No-API-key fallback
 
-Without `ANTHROPIC_API_KEY`, classification falls back to a keyword heuristic (term lists per axis over name+description). Clearly labeled "rough mode" in the UI with a note that a key upgrades accuracy. This matters: the demo must work for anyone who runs `npx agentatlas` with zero setup.
+Without `ANTHROPIC_API_KEY`, classification falls back to a keyword heuristic (term lists per axis over name+description). Clearly labeled "rough mode" in the UI with a note that a key upgrades accuracy. This matters: the demo must work for anyone who runs `npx agent-atlas-cli` with zero setup.
 
 ## 7. Tech stack
 
-- **Node + TypeScript CLI**, published as `agentatlas` on npm (`agent-atlas` was taken by an unrelated package). No server, no accounts, no telemetry. Nothing leaves the machine except the classification API call (and the prompt sends only names/descriptions, never transcript content — say this in the README).
+- **Node + TypeScript CLI**, published as `agent-atlas-cli` on npm (`agent-atlas` was taken by an unrelated package). No server, no accounts, no telemetry. Nothing leaves the machine except the classification API call (and the prompt sends only names/descriptions, never transcript content — say this in the README).
 - D3 (bundled/inlined), `commander` for the CLI, Anthropic SDK for classification. No other heavy deps.
 - Testing: golden-fixture tests — a fake `~/.claude` directory tree + fake transcripts in `fixtures/`, assert on the JSON output of each stage. The renderer is tested by asserting on the data embedded in the HTML, not pixels.
 
@@ -134,7 +134,7 @@ Without `ANTHROPIC_API_KEY`, classification falls back to a keyword heuristic (t
 
 | # | Feature | Done when |
 |---|---|---|
-| M1 | Scanner + Usage Miner | `npx agentatlas --json` prints correct inventory+usage for the fixture tree and for Alfred's real machine |
+| M1 | Scanner + Usage Miner | `npx agent-atlas-cli --json` prints correct inventory+usage for the fixture tree and for Alfred's real machine |
 | M2 | Classifier | Fixture items classified correctly against hand-labeled expectations; cache + overrides work; heuristic fallback works with no key. Also: formalize the §2 adapter interface — declare a `ToolAdapter` interface (`scan() → Inventory`, `mineUsage() → Usage`), rename the M1 Claude Code implementation to `ClaudeCodeAdapter`, and have the CLI iterate adapters. No behavior change; existing golden tests still pass unmodified |
 | M3 | Renderer | `atlas.html` opens with clustered map, tuning bar, working node detail panel |
 | M4 | Diagnostics + share card | Three diagnostic lists render with real numbers; PNG export works |
@@ -160,4 +160,4 @@ M1 is the demo-able core in itself ("look what it found on my machine"); each la
 
 ## 11. Demo shape (for the ORGN post)
 
-Screen-recording, ~45 seconds: type `npx agentatlas`, the map blooms open, hover two big nodes, point at the grey cluster, show the dead-weight line with the token number, end on the share card. Caption: *"I asked my AI setup what it's actually good at. Built with ORGN."*
+Screen-recording, ~45 seconds: type `npx agent-atlas-cli`, the map blooms open, hover two big nodes, point at the grey cluster, show the dead-weight line with the token number, end on the share card. Caption: *"I asked my AI setup what it's actually good at. Built with ORGN."*
