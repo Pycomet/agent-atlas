@@ -118,11 +118,20 @@ export interface DiagnosticsReport {
   gaps: GapFinding[];
 }
 
+/** Per-tool metadata surfaced in --json and embedded in atlas.html (SPEC_V2 §5). */
+export interface ToolMeta {
+  name: string;
+  displayName: string;
+  detected: boolean;
+  usageSupport: UsageSupport;
+  itemCount: number;
+}
+
 /** Everything the renderer embeds into atlas.html (spec §4.4). */
 export interface AtlasData {
   generatedAt: string;
   days: number;
-  tool: string;
+  tools: ToolMeta[];
   inventory: Inventory;
   usage: Usage;
   classification: ClassificationOutput;

@@ -53,7 +53,12 @@ export async function renderAtlas(data: AtlasData): Promise<string> {
 <body>
 <header class="topbar">
   <div class="wordmark">Agent <span class="wordmark-atlas">Atlas</span>
-    <span class="wordmark-sub">${escapeHtml(data.tool)} · last ${data.days} days</span>
+    <span class="wordmark-sub">${escapeHtml(
+      data.tools
+        .filter((t) => t.detected)
+        .map((t) => t.displayName)
+        .join(' + ') || 'no tools detected',
+    )} · last ${data.days} days</span>
   </div>
   <div class="tuning">
     <div class="tuning-head">
@@ -75,6 +80,8 @@ export async function renderAtlas(data: AtlasData): Promise<string> {
     <div id="legend-axes"></div>
     <div class="mapkey-title">Kinds</div>
     <div id="kind-filters"></div>
+    <div class="mapkey-title">Tools</div>
+    <div id="tool-filters"></div>
     <label class="filter-row"><input type="checkbox" id="hide-unused"><span>hide never-used</span></label>
   </aside>
   <aside id="detail-panel" aria-live="polite" hidden></aside>

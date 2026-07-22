@@ -36,7 +36,15 @@ beforeAll(async () => {
   fixtureData = {
     generatedAt: '2026-07-21T00:00:00.000Z',
     days: 30,
-    tool: 'claude-code',
+    tools: [
+      {
+        name: 'claude-code',
+        displayName: 'Claude Code',
+        detected: true,
+        usageSupport: 'full',
+        itemCount: inventory.items.length,
+      },
+    ],
     inventory,
     usage,
     classification,
@@ -92,6 +100,28 @@ describe('renderAtlas', () => {
     llmData.classification.mode = 'llm';
     const llmHtml = await renderAtlas(llmData);
     expect(llmHtml.toLowerCase()).not.toContain('rough mode');
+  });
+
+  it('renders the tool filter container and embeds tools metadata', async () => {
+    const html = await renderAtlas(fixtureData);
+    expect(html).toContain('id="tool-filters"');
+    const embedded = extractEmbedded(html) as AtlasData;
+    expect(embedded.tools[0]!.name).toBe('claude-code');
+  });
+
+  it('renders an empty inventory without throwing and with an empty state', async () => {
+    const empty: AtlasData = {
+      generatedAt: '2026-07-21T00:00:00.000Z',
+      days: 30,
+      tools: [],
+      inventory: { items: [] },
+      usage: { totalSessions: 0, items: {} },
+      classification: { mode: 'heuristic', items: [] },
+      diagnostics: { deadWeight: [], overlaps: [], gaps: [] },
+    };
+    const html = await renderAtlas(empty);
+    expect(html).toContain('no tools detected');
+    expect(html).toContain('tune-empty');
   });
 
   it('states the privacy posture in the page footer', async () => {

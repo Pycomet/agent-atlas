@@ -138,7 +138,7 @@ program
     const html = await renderAtlas({
       generatedAt: new Date().toISOString(),
       days,
-      tool: 'claude-code',
+      tools,
       inventory,
       usage,
       classification,

@@ -14,6 +14,14 @@
   };
   const DEAD = '#414b5e';
   const SURFACE = '#10141d';
+  /* Tool badge palette — assigned by roster order, stable across runs. */
+  const TOOL_COLORS = ['#8a93a6', '#5ec8d8', '#c98bdb', '#7dd487', '#e0b566', '#d88a8a'];
+  const toolList = data.tools || [];
+  const toolMeta = new Map(toolList.map((t, i) => [t.name, { ...t, color: TOOL_COLORS[i % TOOL_COLORS.length] }]));
+  const noUsageTool = (n) => {
+    const meta = toolMeta.get(n.item.tool);
+    return meta !== undefined && meta.usageSupport === 'none';
+  };
   const SYMBOLS = {
     skill: d3.symbolCircle,
     agent: d3.symbolSquare,
@@ -27,12 +35,16 @@
     .filter((item) => clsById.has(item.id))
     .map((item) => {
       const usage = data.usage.items[item.id] || { count: 0, lastUsed: null, sessionsSeen: 0 };
+      const meta = toolMeta.get(item.tool);
+      const usageless = meta !== undefined && meta.usageSupport === 'none';
       return {
         id: item.id,
         item,
         usage,
         cls: clsById.get(item.id),
-        r: 7 + 4 * Math.log2(usage.count + 1),
+        // Usage-less tools render at a fixed size: node size means "how often
+        // used", and we refuse to fake that signal (SPEC_V2 §4.4).
+        r: usageless ? 9 : 7 + 4 * Math.log2(usage.count + 1),
       };
     });
 
@@ -175,9 +187,17 @@
     .attr('d', (n) =>
       symbol.type(SYMBOLS[n.item.kind] || d3.symbolCircle).size(n.r * n.r * Math.PI)(),
     )
-    .attr('fill', (n) => (n.usage.count === 0 ? DEAD : AXIS_COLOR[n.cls.primary]))
-    .attr('fill-opacity', (n) => (n.usage.count === 0 ? 0.55 : 0.92))
-    .attr('stroke', SURFACE)
+    .attr('fill', (n) =>
+      noUsageTool(n) ? AXIS_COLOR[n.cls.primary] : n.usage.count === 0 ? DEAD : AXIS_COLOR[n.cls.primary],
+    )
+    .attr('fill-opacity', (n) => (noUsageTool(n) ? 0.75 : n.usage.count === 0 ? 0.55 : 0.92))
+    .attr('stroke', (n) => {
+      if (toolList.filter((t) => t.detected).length < 2) return noUsageTool(n) ? '#a9b2c3' : SURFACE;
+      const meta = toolMeta.get(n.item.tool);
+      return meta !== undefined ? meta.color : SURFACE;
+    })
+    .attr('stroke-dasharray', (n) => (noUsageTool(n) ? '3 3' : null))
+    .attr('class', (n) => (noUsageTool(n) ? 'no-usage' : null))
     .attr('stroke-width', 2)
     .style('cursor', 'pointer');
 
@@ -254,12 +274,17 @@
       t1.textContent = n.item.name;
       const t2 = document.createElement('div');
       t2.className = 't2';
+      const meta = toolMeta.get(n.item.tool);
       t2.textContent =
         n.item.kind +
         ' · ' +
         n.cls.primary +
         ' · ' +
-        (n.usage.count === 0 ? 'never fired' : n.usage.count + '× in ' + data.days + 'd');
+        (noUsageTool(n)
+          ? 'usage unavailable for ' + (meta !== undefined ? meta.displayName : n.item.tool)
+          : n.usage.count === 0
+            ? 'never fired'
+            : n.usage.count + '× in ' + data.days + 'd');
       tip.append(t1, t2);
       tip.hidden = false;
     })
@@ -405,12 +430,40 @@
     kindFilters.append(row);
   }
 
+  const toolOn = {};
+  const toolFilters = document.getElementById('tool-filters');
+  if (toolFilters !== null) {
+    const toolsPresent = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))];
+    for (const tool of toolsPresent) {
+      toolOn[tool] = true;
+      const meta = toolMeta.get(tool);
+      const row = document.createElement('label');
+      row.className = 'filter-row';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = true;
+      box.addEventListener('change', () => {
+        toolOn[tool] = box.checked;
+        applyFilters();
+      });
+      const dot = document.createElement('span');
+      dot.className = 'key-dot';
+      dot.style.background = meta !== undefined ? meta.color : '#8a93a6';
+      const label = document.createElement('span');
+      label.textContent = meta !== undefined ? meta.displayName : tool;
+      row.append(box, dot, label);
+      toolFilters.append(row);
+    }
+  }
+
   const hideUnused = document.getElementById('hide-unused');
   hideUnused.addEventListener('change', applyFilters);
 
   function applyFilters() {
     const visible = (n) =>
-      kindOn[n.item.kind] !== false && (!hideUnused.checked || n.usage.count > 0);
+      kindOn[n.item.kind] !== false &&
+      toolOn[n.item.tool] !== false &&
+      (!hideUnused.checked || n.usage.count > 0 || noUsageTool(n));
     nodeSel.attr('display', (n) => (visible(n) ? null : 'none'));
     labelSel.attr('display', (n) => (visible(n) ? null : 'none'));
     linkSel.attr('display', (n) => (visible(n) ? null : 'none'));
