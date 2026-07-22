@@ -52,6 +52,14 @@ jobs:
       # With a trusted publisher configured on npmjs.com, OIDC authenticates this
       # (no token needed). To use a classic token instead: add registry-url back
       # to setup-node, add the NPM_TOKEN repo secret, and uncomment the env block.
-      - run: npm publish
+      - run: npm publish --loglevel http
         # env:
         #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Dump OIDC-related npm log lines on failure
+        if: failure()
+        run: |
+          for f in /home/runner/.npm/_logs/*.log; do
+            echo "=== $f"
+            grep -inE "oidc|openid|id_token|audience|exchange|trusted|web-auth|fetch.*registry" "$f" | head -50 || true
+          done
