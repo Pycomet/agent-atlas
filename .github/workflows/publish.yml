@@ -1,0 +1,47 @@
+name: Publish to npm
+
+# Publishes when a version tag is pushed (npm rejects re-publishing an existing
+# version, so publishing on every main merge would fail on non-release merges).
+# Release flow:
+#   npm version patch|minor|major   # bumps package.json + creates the tag
+#   git push origin main --follow-tags
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing (OIDC) + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs a newer npm than Node 22 bundles
+      - run: npm install -g npm@latest
+
+      - name: Verify tag matches package.json version
+        run: |
+          pkg="v$(npm pkg get version | tr -d '"')"
+          if [ "$pkg" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $pkg" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      # With a trusted publisher configured on npmjs.com, OIDC authenticates this
+      # (no token needed). If you use a classic token instead, add the NPM_TOKEN
+      # repo secret and uncomment the env block.
+      - run: npm publish
+        # env:
+        #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
