@@ -25,7 +25,7 @@
     "d3"
   ],
   "bin": {
-    "agent-atlas": "./dist/cli.js"
+    "agent-atlas": "dist/cli.js"
   },
   "files": [
     "dist"

@@ -19,10 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NOTE: no registry-url here — that makes setup-node write a token-auth
+      # .npmrc with a placeholder token, which preempts OIDC trusted publishing.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
 
       # Trusted publishing needs a newer npm than Node 22 bundles
       - run: npm install -g npm@latest
@@ -40,8 +41,8 @@ jobs:
       - run: npm run build
 
       # With a trusted publisher configured on npmjs.com, OIDC authenticates this
-      # (no token needed). If you use a classic token instead, add the NPM_TOKEN
-      # repo secret and uncomment the env block.
+      # (no token needed). To use a classic token instead: add registry-url back
+      # to setup-node, add the NPM_TOKEN repo secret, and uncomment the env block.
       - run: npm publish
         # env:
         #   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
