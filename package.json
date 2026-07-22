@@ -42,7 +42,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
     "commander": "^12.1.0",
-    "d3": "^7.9.0"
+    "d3": "^7.9.0",
+    "smol-toml": "^1.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

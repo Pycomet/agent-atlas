@@ -1,8 +1,11 @@
-import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { codexAdapter } from './adapters/codex.js';
+import { dirExists, prefixInventory, prefixUsage } from './adapters/shared.js';
 import { mineUsage } from './miner.js';
 import { scan } from './scanner.js';
 import type { AdapterContext, Inventory, Usage, UsageSupport } from './types.js';
+
+export { dirExists, fileExists, prefixInventory, prefixUsage } from './adapters/shared.js';
 
 /**
  * Per-tool adapter (SPEC_V2 §4.1): each AI coding tool implements this and
@@ -16,39 +19,6 @@ export interface ToolAdapter {
   detect(ctx: AdapterContext): Promise<boolean>;
   scan(ctx: AdapterContext): Promise<Inventory>;
   mineUsage(ctx: AdapterContext): Promise<Usage>;
-}
-
-export async function dirExists(path: string): Promise<boolean> {
-  try {
-    return (await fs.stat(path)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-export async function fileExists(path: string): Promise<boolean> {
-  try {
-    return (await fs.stat(path)).isFile();
-  } catch {
-    return false;
-  }
-}
-
-/** Rewrite every item id to `<tool>/<id>` and stamp `item.tool` (SPEC_V2 §4.1). */
-export function prefixInventory(inventory: Inventory, tool: string): Inventory {
-  return {
-    items: inventory.items.map((item) => ({ ...item, id: `${tool}/${item.id}`, tool })),
-  };
-}
-
-/** Rewrite every usage id to `<tool>/<id>` (SPEC_V2 §4.1). */
-export function prefixUsage(usage: Usage, tool: string): Usage {
-  return {
-    totalSessions: usage.totalSessions,
-    items: Object.fromEntries(
-      Object.entries(usage.items).map(([id, entry]) => [`${tool}/${id}`, entry]),
-    ),
-  };
 }
 
 export const claudeCodeAdapter: ToolAdapter = {
@@ -65,7 +35,7 @@ export const claudeCodeAdapter: ToolAdapter = {
     ),
 };
 
-export const adapters: ToolAdapter[] = [claudeCodeAdapter];
+export const adapters: ToolAdapter[] = [claudeCodeAdapter, codexAdapter];
 
 export async function detectAdapters(ctx: AdapterContext): Promise<ToolAdapter[]> {
   const flags = await Promise.all(adapters.map((adapter) => adapter.detect(ctx)));

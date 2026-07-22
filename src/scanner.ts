@@ -162,7 +162,7 @@ function transportOf(config: Record<string, unknown>): McpTransport {
   return 'unknown';
 }
 
-function mcpItems(config: Record<string, unknown> | null, sourcePath: string): InventoryItem[] {
+export function mcpItems(config: Record<string, unknown> | null, sourcePath: string): InventoryItem[] {
   const servers = asRecord(config?.['mcpServers']);
   if (servers === null) return [];
   const items: InventoryItem[] = [];
