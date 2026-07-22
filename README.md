@@ -86,6 +86,17 @@ npm test          # vitest, runs against the fixture tree in fixtures/
 
 All tests run against a fake `~/.claude` tree in `fixtures/` — nothing in the test suite touches your real setup. If you're adding a scanner or classifier change, extend the fixtures and the expected outputs alongside it.
 
+### Releasing
+
+Merging to `main` runs CI only. Publishing to npm happens when a version tag is pushed:
+
+```bash
+npm version patch    # or minor / major — bumps package.json, commits, tags vX.Y.Z
+git push origin main --follow-tags
+```
+
+The [publish workflow](.github/workflows/publish.yml) then verifies the tag matches `package.json`, runs the test suite, builds, and publishes to npm via trusted publishing (OIDC) — no tokens involved.
+
 Contributions welcome — especially adapter implementations for other AI coding tools and hand-labeled classification examples for the rubric.
 
 ## Teams
