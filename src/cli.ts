@@ -43,9 +43,9 @@ const program = new Command();
 program
   .name('agent-atlas')
   .description(
-    'Scans your Claude Code setup (skills, agents, MCP servers, hooks) and mines usage from session transcripts. Read-only, local-only; only item names/descriptions are sent to the classification API.',
+    'Scans your AI coding setup — Claude Code, Codex CLI, Cursor, ORGN CDE, OpenCode — and mines usage from local session data. Read-only, local-only; only item names/descriptions are sent to the classification API.',
   )
-  .version('0.1.0')
+  .version('0.2.0')
   .option('--json', 'dump raw inventory + usage + classification as JSON')
   .option('--days <n>', 'usage window in days', '30')
   .option('--rough', 'force keyword-heuristic classification (skip the API)')
@@ -104,12 +104,14 @@ program
     let totalSessions = 0;
     const usageItems: Record<string, UsageEntry> = {};
     const perToolCounts = new Map<string, number>();
+    const sessionsByTool: Record<string, number> = {};
     for (const adapter of selected) {
       const inv = await adapter.scan(ctx);
       items.push(...inv.items);
       perToolCounts.set(adapter.name, inv.items.length);
       const mined = await adapter.mineUsage(ctx);
       totalSessions += mined.totalSessions;
+      sessionsByTool[adapter.name] = mined.totalSessions;
       Object.assign(usageItems, mined.items);
     }
     const tools = adapters.map((adapter) => ({
@@ -126,7 +128,7 @@ program
     const useLlm = opts.rough !== true && typeof apiKey === 'string' && apiKey !== '';
     const model = useLlm ? createAnthropicModel() : null;
     const classification = await classify(inventory, { atlasDir, model });
-    const diagnostics = await diagnose(inventory, usage, classification, days, { model });
+    const diagnostics = await diagnose(inventory, usage, classification, days, { model, tools, sessionsByTool });
     const crossTool = crossToolDiagnose(inventory, usage, classification, tools);
 
     if (opts.json === true) {

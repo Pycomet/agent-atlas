@@ -1,6 +1,7 @@
 import type { ClassifyModel } from './classifier/llm.js';
 import type {
   Axis,
+  ToolMeta,
   ClassificationOutput,
   DeadWeightFinding,
   DiagnosticsReport,
@@ -15,6 +16,10 @@ import { AXES } from './types.js';
 export interface DiagnoseOptions {
   /** Optional LLM yes/no filter for overlap candidates. */
   model?: ClassifyModel | null;
+  /** Tool roster — items of usage-less tools are excluded from dead weight (no data, no claim). */
+  tools?: ToolMeta[];
+  /** Per-tool session totals — token math multiplies by the owning tool's sessions, not the global sum. */
+  sessionsByTool?: Record<string, number>;
 }
 
 const GAP_THRESHOLD = 0.05;
@@ -64,13 +69,24 @@ function findDeadWeight(
   inventory: Inventory,
   usage: Usage,
   days: number,
+  tools?: ToolMeta[],
+  sessionsByTool?: Record<string, number>,
 ): DeadWeightFinding[] {
+  // "Never used" is only claimable for tools that actually have usage data.
+  const usageless = new Set(
+    (tools ?? []).filter((t) => t.usageSupport === 'none').map((t) => t.name),
+  );
   const findings: DeadWeightFinding[] = [];
   for (const item of inventory.items) {
     if (item.kind === 'memory') continue;
+    if (item.tool !== undefined && usageless.has(item.tool)) continue;
     if ((usage.items[item.id]?.count ?? 0) > 0) continue;
+    const sessions =
+      item.tool !== undefined && sessionsByTool?.[item.tool] !== undefined
+        ? (sessionsByTool[item.tool] as number)
+        : usage.totalSessions;
     const { perSession, basis } = contextEstimate(item);
-    const total = perSession === null ? null : perSession * usage.totalSessions;
+    const total = perSession === null ? null : perSession * sessions;
     findings.push({
       itemId: item.id,
       kind: item.kind,
@@ -78,7 +94,7 @@ function findDeadWeight(
       estTokensPerSession: perSession,
       estTokensTotal: total,
       estimateBasis: basis,
-      line: deadWeightLine(item, days, usage.totalSessions, perSession, total, basis),
+      line: deadWeightLine(item, days, sessions, perSession, total, basis),
     });
   }
   return findings.sort((a, b) => {
@@ -260,7 +276,7 @@ export async function diagnose(
   opts: DiagnoseOptions = {},
 ): Promise<DiagnosticsReport> {
   return {
-    deadWeight: findDeadWeight(inventory, usage, days),
+    deadWeight: findDeadWeight(inventory, usage, days, opts.tools, opts.sessionsByTool),
     overlaps: await findOverlaps(inventory, usage, classification, days, opts.model ?? null),
     gaps: findGaps(classification),
   };

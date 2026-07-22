@@ -18,7 +18,22 @@ In one picture you can answer questions you currently can't:
 npx agent-atlas-cli
 ```
 
-That's it. No config, no account. Works on **Claude Code** setups today (Cursor and friends are on the roadmap — the scanner is built behind an adapter interface).
+That's it. No config, no account. v2 maps every supported tool it detects on your machine:
+
+| Tool | Inventory | Usage data |
+|---|---|---|
+| **Claude Code** | skills, agents, MCP servers, hooks | full (session transcripts) |
+| **Codex CLI** | MCP servers (`config.toml`), `AGENTS.md` | full (session logs) — CLI layout only; the desktop app keeps no public surface and shows as "not detected" |
+| **ORGN CDE** | agents, MCP servers, commands (`opencode.jsonc`) | partial (local session DB, read-only) |
+| **OpenCode** | same as ORGN CDE (shared format) | partial |
+| **Cursor** | MCP servers, skills, rules files | none — nodes render at fixed size with a "usage unavailable" badge; we don't fake numbers |
+
+**Why not ChatGPT / claude.ai / Gemini web?** Their configuration lives on company servers — there is nothing local to read, and no API exposes installed connectors plus usage. We'd rather not pretend. (Gemini CLI and Windsurf adapters are planned.)
+
+```bash
+npx agent-atlas --list-tools     # what's detected on this machine
+npx agent-atlas --tool cursor    # restrict to one tool (repeatable)
+```
 
 Don't have an Anthropic API key handy? It still works:
 
@@ -72,6 +87,11 @@ Classification uses your `ANTHROPIC_API_KEY` environment variable if set; otherw
 | M2 | Classifier — LLM pass, cache, overrides, no-key fallback | ✅ done |
 | M3 | Renderer — interactive map + tuning bar (`atlas.html`) | ✅ done |
 | M4 | Diagnostics (dead weight, overlaps, gaps) + shareable card | ✅ done |
+| v2 M5 | Multi-tool adapter core — `detect()`, `--list-tools`, tool badges/filters | ✅ done |
+| v2 M6 | Codex CLI + Cursor adapters | ✅ done |
+| v2 M7 | ORGN CDE + OpenCode adapters (read-only SQLite usage) | ✅ done |
+| v2 M8 | Cross-tool diagnostics + per-tool tuning bars | ✅ done |
+| v2.x | Gemini CLI, Windsurf adapters; recommendations | 💭 planned |
 | v2 | Adapters for Cursor, Codex CLI, Gemini CLI; recommendations | 💭 planned |
 
 The full design lives in [SPEC.md](SPEC.md).
