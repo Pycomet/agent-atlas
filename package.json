@@ -1,6 +1,6 @@
 {
   "name": "agent-atlas-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scans your AI coding setup and turns it into an interactive mind map — see what your agents and skills are good at, what you never use, and what's missing. Read-only, local-only.",
   "type": "module",
   "license": "MIT",
