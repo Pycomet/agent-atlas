@@ -122,18 +122,61 @@ export async function mineUsage(opts: MineOptions): Promise<Usage> {
   return { totalSessions, items };
 }
 
+/** `skill:` / `agent:` id → its bare name (text after the last colon), else null. */
+function bareName(id: string): string | null {
+  const unprefixed = id.split('/').pop() ?? id;
+  const match = /^(skill|agent):(.+)$/.exec(unprefixed);
+  if (match === null) return null;
+  const name = match[2] as string;
+  return `${match[1]}:${name.split(':').pop() ?? name}`;
+}
+
 /**
  * Every inventory item gets a usage entry; items never seen get zeros —
  * that's the dead-weight signal, not an error (spec §4.2). Usage entries
  * for items no longer installed are kept.
+ *
+ * Plugin skills can be invoked under a different prefix than the plugin
+ * cache directory they were scanned from (e.g. dir `vercel-plugin` vs
+ * invocation `vercel:deploy`). When an unmatched usage id and exactly one
+ * zero-usage inventory item share a bare name, the usage is credited to
+ * that item; with two or more candidates we never guess.
  */
 export function mergeUsage(inventory: Inventory, usage: Usage): Usage {
   const items: Record<string, UsageEntry> = {};
   for (const item of inventory.items) {
     items[item.id] = usage.items[item.id] ?? { count: 0, lastUsed: null, sessionsSeen: 0 };
   }
-  for (const [id, entry] of Object.entries(usage.items)) {
-    if (!(id in items)) items[id] = entry;
+
+  const unmatched = Object.entries(usage.items).filter(([id]) => !(id in items));
+
+  // Bare name → inventory ids that could claim it (only exact-miss items).
+  const candidates = new Map<string, string[]>();
+  for (const item of inventory.items) {
+    if (usage.items[item.id] !== undefined) continue;
+    const bare = bareName(item.id);
+    if (bare === null) continue;
+    candidates.set(bare, [...(candidates.get(bare) ?? []), item.id]);
   }
+
+  for (const [id, entry] of unmatched) {
+    const bare = bareName(id);
+    const claimants = bare !== null ? (candidates.get(bare) ?? []) : [];
+    if (claimants.length === 1) {
+      const target = claimants[0] as string;
+      const existing = items[target] as UsageEntry;
+      items[target] = {
+        count: existing.count + entry.count,
+        lastUsed:
+          existing.lastUsed !== null && existing.lastUsed > (entry.lastUsed ?? '')
+            ? existing.lastUsed
+            : entry.lastUsed,
+        sessionsSeen: existing.sessionsSeen + entry.sessionsSeen,
+      };
+    } else {
+      items[id] = entry;
+    }
+  }
+
   return { totalSessions: usage.totalSessions, items };
 }
