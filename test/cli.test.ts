@@ -197,3 +197,38 @@ describe('agent-atlas CLI', () => {
     expect(out.toLowerCase()).toContain('rough mode');
   });
 });
+
+describe('multi-tool CLI surface (v2)', () => {
+  it('--list-tools lists every registered adapter with detection status', () => {
+    const out = runCli('--list-tools', '--home', HOME, '--project', PROJECT);
+    expect(out).toMatch(/claude-code\s+Claude Code\s+detected\s+usage:full/);
+  });
+
+  it('--tool with an unknown name exits 1 and lists valid names', () => {
+    let failed = false;
+    try {
+      runCli('--tool', 'nope', '--json', '--home', HOME, '--project', PROJECT);
+    } catch (error) {
+      failed = true;
+      const stderr = (error as { stderr?: Buffer | string }).stderr?.toString() ?? '';
+      expect(stderr).toContain('unknown tool');
+      expect(stderr).toContain('claude-code');
+    }
+    expect(failed).toBe(true);
+  });
+
+  it('--json includes a tools array with detection + usage metadata', () => {
+    const out = runCli(
+      '--json', '--home', HOME, '--project', PROJECT, '--days', '36500',
+      '--atlas-dir', tmpAtlasDir(),
+    );
+    const parsed = JSON.parse(out) as CliJson & {
+      tools: { name: string; displayName: string; detected: boolean; usageSupport: string; itemCount: number }[];
+    };
+    const cc = parsed.tools.find((t) => t.name === 'claude-code');
+    expect(cc).toBeDefined();
+    expect(cc!.detected).toBe(true);
+    expect(cc!.usageSupport).toBe('full');
+    expect(cc!.itemCount).toBe(parsed.inventory.items.length);
+  });
+});

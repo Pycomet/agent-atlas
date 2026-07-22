@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import { Command } from 'commander';
 import os from 'node:os';
 import { join, resolve } from 'node:path';
-import { detectAdapters } from './adapter.js';
+import { adapters, detectAdapters } from './adapter.js';
 import { createAnthropicModel } from './classifier/anthropic-model.js';
 import { classify } from './classifier/index.js';
 import { diagnose } from './diagnostics.js';
@@ -23,6 +23,8 @@ interface CliOptions {
   out: string;
   open: boolean;
   share?: boolean;
+  listTools?: boolean;
+  tool?: string[];
 }
 
 /** Best-effort browser launch — never fails the run, never blocks exit. */
@@ -52,6 +54,12 @@ program
   .option('--no-open', 'do not open atlas.html in the browser')
   .option('--home <dir>', 'treat <dir> as the home directory (mainly for testing)')
   .option('--project <dir>', 'project directory to scan', process.cwd())
+  .option('--list-tools', 'list registered tool adapters and their detection status, then exit')
+  .option(
+    '--tool <name>',
+    'restrict scanning to the named tool (repeatable)',
+    (value: string, prev: string[] = []) => [...prev, value],
+  )
   .action(async (opts: CliOptions) => {
     const days = Number.parseInt(opts.days, 10);
     if (!Number.isInteger(days) || days <= 0) {
@@ -65,16 +73,51 @@ program
     // One adapter per supported tool (SPEC_V2 §3); only detected tools scan.
     const ctx = { homeDir, projectDir: opts.project, days };
     const detected = await detectAdapters(ctx);
+    const detectedNames = new Set(detected.map((a) => a.name));
+
+    if (opts.listTools === true) {
+      for (const adapter of adapters) {
+        process.stdout.write(
+          `${adapter.name.padEnd(14)}${adapter.displayName.padEnd(14)}${
+            detectedNames.has(adapter.name) ? 'detected' : 'not detected'
+          }  usage:${adapter.usageSupport}\n`,
+        );
+      }
+      return;
+    }
+
+    const validNames = adapters.map((a) => a.name);
+    for (const name of opts.tool ?? []) {
+      if (!validNames.includes(name)) {
+        process.stderr.write(`error: unknown tool "${name}" — valid: ${validNames.join(', ')}\n`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+    const selected =
+      opts.tool !== undefined && opts.tool.length > 0
+        ? detected.filter((a) => opts.tool?.includes(a.name))
+        : detected;
+
     const items: InventoryItem[] = [];
     let totalSessions = 0;
     const usageItems: Record<string, UsageEntry> = {};
-    for (const adapter of detected) {
+    const perToolCounts = new Map<string, number>();
+    for (const adapter of selected) {
       const inv = await adapter.scan(ctx);
       items.push(...inv.items);
+      perToolCounts.set(adapter.name, inv.items.length);
       const mined = await adapter.mineUsage(ctx);
       totalSessions += mined.totalSessions;
       Object.assign(usageItems, mined.items);
     }
+    const tools = adapters.map((adapter) => ({
+      name: adapter.name,
+      displayName: adapter.displayName,
+      detected: detectedNames.has(adapter.name),
+      usageSupport: adapter.usageSupport,
+      itemCount: perToolCounts.get(adapter.name) ?? 0,
+    }));
     const inventory = { items };
     const usage: Usage = mergeUsage(inventory, { totalSessions, items: usageItems });
 
@@ -86,7 +129,7 @@ program
 
     if (opts.json === true) {
       process.stdout.write(
-        `${JSON.stringify({ days, inventory, usage, classification, diagnostics }, null, 2)}\n`,
+        `${JSON.stringify({ days, tools, inventory, usage, classification, diagnostics }, null, 2)}\n`,
       );
       return;
     }
