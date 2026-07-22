@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { adapters, claudeCodeAdapter, detectAdapters } from '../src/adapter.js';
+import { adapters, claudeCodeAdapter, detectAdapters, prefixInventory, prefixUsage } from '../src/adapter.js';
 import { mineUsage } from '../src/miner.js';
 import { scan } from '../src/scanner.js';
 import type { AdapterContext } from '../src/types.js';
@@ -34,16 +34,20 @@ describe('claudeCodeAdapter', () => {
     expect(await claudeCodeAdapter.detect(ctx(emptyHome))).toBe(false);
   });
 
-  it('scan() is behavior-identical to the direct scanner', async () => {
+  it('scan() equals the direct scanner with claude-code/ prefixed ids', async () => {
     const viaAdapter = await claudeCodeAdapter.scan(ctx(HOME));
     const direct = await scan({ homeDir: HOME, projectDir: PROJECT });
-    expect(viaAdapter).toEqual(direct);
+    expect(viaAdapter).toEqual(prefixInventory(direct, 'claude-code'));
+    for (const item of viaAdapter.items) {
+      expect(item.id.startsWith('claude-code/')).toBe(true);
+      expect(item.tool).toBe('claude-code');
+    }
   });
 
-  it('mineUsage() is behavior-identical to the direct miner', async () => {
+  it('mineUsage() equals the direct miner with claude-code/ prefixed ids', async () => {
     const viaAdapter = await claudeCodeAdapter.mineUsage(ctx(HOME));
     const direct = await mineUsage({ homeDir: HOME, days: 30, now: NOW });
-    expect(viaAdapter).toEqual(direct);
+    expect(viaAdapter).toEqual(prefixUsage(direct, 'claude-code'));
   });
 });
 

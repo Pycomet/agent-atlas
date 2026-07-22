@@ -18,7 +18,8 @@ describe('heuristicClassify (rough mode)', () => {
   it('matches every hand-labeled fixture primary', async () => {
     const inventory = await scan({ homeDir: HOME, projectDir: PROJECT });
     for (const [id, expectedPrimary] of Object.entries(expectedPrimaries)) {
-      const item = inventory.items.find((i) => i.id === id);
+      // Labels use the CLI's tool-namespaced ids; the direct scanner is unprefixed.
+      const item = inventory.items.find((i) => `claude-code/${i.id}` === id);
       expect(item, `fixture item ${id} missing from inventory`).toBeDefined();
       if (item === undefined) continue;
       const result = heuristicClassify(item);

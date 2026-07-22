@@ -10,6 +10,8 @@ export interface InventoryItem {
   description: string | null;
   sourcePath: string;
   sizeBytes: number;
+  /** Owning tool (adapter name) — set by the adapter layer's id prefixing (SPEC_V2 §4.1). */
+  tool?: string;
   /** e.g. ["invalid-frontmatter"] — item kept, never a crash (spec §4.1). */
   flags?: string[];
   /** Agents only: allowed tools from frontmatter. */

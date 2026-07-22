@@ -34,13 +34,35 @@ export async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+/** Rewrite every item id to `<tool>/<id>` and stamp `item.tool` (SPEC_V2 §4.1). */
+export function prefixInventory(inventory: Inventory, tool: string): Inventory {
+  return {
+    items: inventory.items.map((item) => ({ ...item, id: `${tool}/${item.id}`, tool })),
+  };
+}
+
+/** Rewrite every usage id to `<tool>/<id>` (SPEC_V2 §4.1). */
+export function prefixUsage(usage: Usage, tool: string): Usage {
+  return {
+    totalSessions: usage.totalSessions,
+    items: Object.fromEntries(
+      Object.entries(usage.items).map(([id, entry]) => [`${tool}/${id}`, entry]),
+    ),
+  };
+}
+
 export const claudeCodeAdapter: ToolAdapter = {
   name: 'claude-code',
   displayName: 'Claude Code',
   usageSupport: 'full',
   detect: (ctx) => dirExists(join(ctx.homeDir, '.claude')),
-  scan: (ctx) => scan({ homeDir: ctx.homeDir, projectDir: ctx.projectDir }),
-  mineUsage: (ctx) => mineUsage({ homeDir: ctx.homeDir, days: ctx.days, now: ctx.now }),
+  scan: async (ctx) =>
+    prefixInventory(await scan({ homeDir: ctx.homeDir, projectDir: ctx.projectDir }), 'claude-code'),
+  mineUsage: async (ctx) =>
+    prefixUsage(
+      await mineUsage({ homeDir: ctx.homeDir, days: ctx.days, now: ctx.now }),
+      'claude-code',
+    ),
 };
 
 export const adapters: ToolAdapter[] = [claudeCodeAdapter];
