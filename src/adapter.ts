@@ -1,22 +1,51 @@
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { mineUsage } from './miner.js';
 import { scan } from './scanner.js';
-import type { Inventory, MineOptions, ScanOptions, Usage } from './types.js';
+import type { AdapterContext, Inventory, Usage, UsageSupport } from './types.js';
 
 /**
- * Per-tool adapter (spec §2): each AI coding tool implements this pair and
- * yields tool-agnostic JSON. v1 ships Claude Code only; a CursorAdapter etc.
- * would be another entry in `adapters`.
+ * Per-tool adapter (SPEC_V2 §4.1): each AI coding tool implements this and
+ * yields tool-agnostic JSON with tool-namespaced ids. The CLI runs detect()
+ * on every registered adapter and scans only the ones that are present.
  */
 export interface ToolAdapter {
   name: string;
-  scan(opts: ScanOptions): Promise<Inventory>;
-  mineUsage(opts: MineOptions): Promise<Usage>;
+  displayName: string;
+  usageSupport: UsageSupport;
+  detect(ctx: AdapterContext): Promise<boolean>;
+  scan(ctx: AdapterContext): Promise<Inventory>;
+  mineUsage(ctx: AdapterContext): Promise<Usage>;
+}
+
+export async function dirExists(path: string): Promise<boolean> {
+  try {
+    return (await fs.stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export async function fileExists(path: string): Promise<boolean> {
+  try {
+    return (await fs.stat(path)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export const claudeCodeAdapter: ToolAdapter = {
   name: 'claude-code',
-  scan,
-  mineUsage,
+  displayName: 'Claude Code',
+  usageSupport: 'full',
+  detect: (ctx) => dirExists(join(ctx.homeDir, '.claude')),
+  scan: (ctx) => scan({ homeDir: ctx.homeDir, projectDir: ctx.projectDir }),
+  mineUsage: (ctx) => mineUsage({ homeDir: ctx.homeDir, days: ctx.days, now: ctx.now }),
 };
 
 export const adapters: ToolAdapter[] = [claudeCodeAdapter];
+
+export async function detectAdapters(ctx: AdapterContext): Promise<ToolAdapter[]> {
+  const flags = await Promise.all(adapters.map((adapter) => adapter.detect(ctx)));
+  return adapters.filter((_, i) => flags[i] === true);
+}

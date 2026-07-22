@@ -44,6 +44,21 @@ export interface ScanOptions {
   projectDir?: string;
 }
 
+/** What an adapter can honestly report about invocation frequency (SPEC_V2 §3). */
+export type UsageSupport = 'full' | 'partial' | 'none';
+
+/** Everything an adapter needs to scan one machine (SPEC_V2 §4.1). */
+export interface AdapterContext {
+  homeDir: string;
+  projectDir?: string;
+  /** Usage window in days. */
+  days: number;
+  /** Injectable clock for deterministic tests. */
+  now?: Date;
+  /** Per-adapter config from ~/.agent-atlas/config.json, keyed by adapter name. */
+  config?: Record<string, unknown>;
+}
+
 /** The five capability axes, fixed for v1 (spec §4.3). Order breaks ties. */
 export const AXES = ['engineering', 'writing', 'research', 'design', 'ops'] as const;
 export type Axis = (typeof AXES)[number];

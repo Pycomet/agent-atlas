@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import { Command } from 'commander';
 import os from 'node:os';
 import { join, resolve } from 'node:path';
-import { adapters } from './adapter.js';
+import { detectAdapters } from './adapter.js';
 import { createAnthropicModel } from './classifier/anthropic-model.js';
 import { classify } from './classifier/index.js';
 import { diagnose } from './diagnostics.js';
@@ -62,14 +62,16 @@ program
     const homeDir = opts.home ?? os.homedir();
     const atlasDir = opts.atlasDir ?? join(os.homedir(), '.agent-atlas');
 
-    // One adapter per supported tool (spec §2) — v1 ships Claude Code only.
+    // One adapter per supported tool (SPEC_V2 §3); only detected tools scan.
+    const ctx = { homeDir, projectDir: opts.project, days };
+    const detected = await detectAdapters(ctx);
     const items: InventoryItem[] = [];
     let totalSessions = 0;
     const usageItems: Record<string, UsageEntry> = {};
-    for (const adapter of adapters) {
-      const inv = await adapter.scan({ homeDir, projectDir: opts.project });
+    for (const adapter of detected) {
+      const inv = await adapter.scan(ctx);
       items.push(...inv.items);
-      const mined = await adapter.mineUsage({ homeDir, days });
+      const mined = await adapter.mineUsage(ctx);
       totalSessions += mined.totalSessions;
       Object.assign(usageItems, mined.items);
     }
