@@ -1,0 +1,4 @@
+---
+description: Code style rules for this repo
+---
+Use tabs. Prefer named exports.
