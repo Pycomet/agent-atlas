@@ -28,6 +28,15 @@ jobs:
       # Trusted publishing needs a newer npm than Node 22 bundles
       - run: npm install -g npm@latest
 
+      - name: OIDC diagnostics
+        run: |
+          echo "npm version: $(npm --version)"
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "OIDC token endpoint: available"
+          else
+            echo "OIDC token endpoint: MISSING (id-token permission not effective)"
+          fi
+
       - name: Verify tag matches package.json version
         run: |
           pkg="v$(npm pkg get version | tr -d '"')"
