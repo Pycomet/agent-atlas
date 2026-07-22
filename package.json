@@ -1,9 +1,29 @@
 {
-  "name": "agent-atlas",
+  "name": "agentatlas",
   "version": "0.1.0",
-  "description": "Scans your AI coding setup and turns it into an interactive mind map. Read-only, local-only.",
+  "description": "Scans your AI coding setup and turns it into an interactive mind map — see what your agents and skills are good at, what you never use, and what's missing. Read-only, local-only.",
   "type": "module",
   "license": "MIT",
+  "author": "Alfred Emmanuel <alfredemmanuelinyang@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pycomet/agent-atlas.git"
+  },
+  "homepage": "https://github.com/Pycomet/agent-atlas#readme",
+  "bugs": {
+    "url": "https://github.com/Pycomet/agent-atlas/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "ai-agents",
+    "mcp",
+    "skills",
+    "visualization",
+    "developer-tools",
+    "cli",
+    "d3"
+  ],
   "bin": {
     "agent-atlas": "./dist/cli.js"
   },
@@ -16,7 +36,8 @@
   "scripts": {
     "build": "tsc && mkdir -p dist/renderer/assets && cp src/renderer/assets/app.js src/renderer/assets/style.css dist/renderer/assets/",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
