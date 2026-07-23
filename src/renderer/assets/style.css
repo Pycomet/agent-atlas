@@ -295,3 +295,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- v2: tool badges, by-tool tuning, cross-tool ---------- */
+#tuning-bar.by-tool { display: flex; flex-direction: column; gap: 3px; }
+.tune-tool-row { display: flex; align-items: center; gap: 8px; }
+.tune-tool-label { font-size: 10px; min-width: 82px; text-align: right; letter-spacing: 0.04em; }
+.tune-mini { display: flex; flex: 1; height: 8px; border-radius: 4px; overflow: hidden; }
+.tune-mini .tune-lbl { display: none; }
+path.no-usage { stroke-linecap: round; }

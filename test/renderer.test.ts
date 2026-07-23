@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { classify } from '../src/classifier/index.js';
+import { crossToolDiagnose } from '../src/cross-tool.js';
 import { diagnose } from '../src/diagnostics.js';
 import { mergeUsage, mineUsage } from '../src/miner.js';
 import { renderAtlas } from '../src/renderer/index.js';
@@ -33,14 +34,25 @@ beforeAll(async () => {
     model: null,
   });
   const diagnostics = await diagnose(inventory, usage, classification, 30);
+  const toolsMeta = [
+    {
+      name: 'claude-code',
+      displayName: 'Claude Code',
+      detected: true,
+      usageSupport: 'full' as const,
+      itemCount: inventory.items.length,
+    },
+  ];
+  const crossTool = crossToolDiagnose(inventory, usage, classification, toolsMeta);
   fixtureData = {
     generatedAt: '2026-07-21T00:00:00.000Z',
     days: 30,
-    tool: 'claude-code',
+    tools: toolsMeta,
     inventory,
     usage,
     classification,
     diagnostics,
+    crossTool,
   };
 });
 
@@ -92,6 +104,31 @@ describe('renderAtlas', () => {
     llmData.classification.mode = 'llm';
     const llmHtml = await renderAtlas(llmData);
     expect(llmHtml.toLowerCase()).not.toContain('rough mode');
+  });
+
+  it('renders the tool filter container and embeds tools metadata', async () => {
+    const html = await renderAtlas(fixtureData);
+    expect(html).toContain('id="tool-filters"');
+    expect(html).toContain('id="crosstool"');
+    expect(html).toContain('id="toggle-bytool"');
+    const embedded = extractEmbedded(html) as AtlasData;
+    expect(embedded.tools[0]!.name).toBe('claude-code');
+  });
+
+  it('renders an empty inventory without throwing and with an empty state', async () => {
+    const empty: AtlasData = {
+      generatedAt: '2026-07-21T00:00:00.000Z',
+      days: 30,
+      tools: [],
+      inventory: { items: [] },
+      usage: { totalSessions: 0, items: {} },
+      classification: { mode: 'heuristic', items: [] },
+      diagnostics: { deadWeight: [], overlaps: [], gaps: [] },
+      crossTool: { duplicates: [], imbalance: [], rulesOverlaps: [] },
+    };
+    const html = await renderAtlas(empty);
+    expect(html).toContain('no tools detected');
+    expect(html).toContain('tune-empty');
   });
 
   it('states the privacy posture in the page footer', async () => {

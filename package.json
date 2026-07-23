@@ -1,6 +1,6 @@
 {
   "name": "agent-atlas-cli",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Scans your AI coding setup and turns it into an interactive mind map — see what your agents and skills are good at, what you never use, and what's missing. Read-only, local-only.",
   "type": "module",
   "license": "MIT",
@@ -42,7 +42,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.4",
     "commander": "^12.1.0",
-    "d3": "^7.9.0"
+    "d3": "^7.9.0",
+    "smol-toml": "^1.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -1,0 +1,9 @@
+# Codex CLI fixture config — mirrors the documented [mcp_servers.<name>] layout.
+model = "gpt-5.2-codex"
+
+[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"

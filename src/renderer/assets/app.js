@@ -14,6 +14,14 @@
   };
   const DEAD = '#414b5e';
   const SURFACE = '#10141d';
+  /* Tool badge palette — assigned by roster order, stable across runs. */
+  const TOOL_COLORS = ['#8a93a6', '#5ec8d8', '#c98bdb', '#7dd487', '#e0b566', '#d88a8a'];
+  const toolList = data.tools || [];
+  const toolMeta = new Map(toolList.map((t, i) => [t.name, { ...t, color: TOOL_COLORS[i % TOOL_COLORS.length] }]));
+  const noUsageTool = (n) => {
+    const meta = toolMeta.get(n.item.tool);
+    return meta !== undefined && meta.usageSupport === 'none';
+  };
   const SYMBOLS = {
     skill: d3.symbolCircle,
     agent: d3.symbolSquare,
@@ -27,20 +35,24 @@
     .filter((item) => clsById.has(item.id))
     .map((item) => {
       const usage = data.usage.items[item.id] || { count: 0, lastUsed: null, sessionsSeen: 0 };
+      const meta = toolMeta.get(item.tool);
+      const usageless = meta !== undefined && meta.usageSupport === 'none';
       return {
         id: item.id,
         item,
         usage,
         cls: clsById.get(item.id),
-        r: 7 + 4 * Math.log2(usage.count + 1),
+        // Usage-less tools render at a fixed size: node size means "how often
+        // used", and we refuse to fake that signal (SPEC_V2 §4.4).
+        r: usageless ? 9 : 7 + 4 * Math.log2(usage.count + 1),
       };
     });
 
   /* ---------- tuning bar ---------- */
-  function tuningShares(mode) {
+  function tuningShares(mode, subset) {
     const totals = Object.fromEntries(AXES.map((a) => [a, 0]));
     let denom = 0;
-    for (const n of nodes) {
+    for (const n of subset || nodes) {
       const w = mode === 'used' ? n.usage.count : 1;
       if (w === 0) continue;
       denom += w;
@@ -49,19 +61,7 @@
     return denom === 0 ? null : AXES.map((a) => ({ axis: a, share: totals[a] / denom }));
   }
 
-  function renderTuning(mode) {
-    const bar = document.getElementById('tuning-bar');
-    bar.textContent = '';
-    // Empty setup: both modes yield null — render an empty state, never throw
-    // (an exception here would kill the whole page script).
-    const shares = tuningShares(mode) || tuningShares('installed') || [];
-    if (shares.length === 0) {
-      const empty = document.createElement('span');
-      empty.className = 'tune-empty';
-      empty.textContent = 'nothing classifiable yet — install a skill or agent and re-run';
-      bar.appendChild(empty);
-      return;
-    }
+  function segRow(shares, container) {
     for (const { axis, share } of shares) {
       if (share < 0.005) continue;
       const seg = document.createElement('div');
@@ -73,13 +73,62 @@
       lbl.className = 'tune-lbl';
       lbl.textContent = axis + ' ' + Math.round(share * 100) + '%';
       seg.appendChild(lbl);
-      bar.appendChild(seg);
+      container.appendChild(seg);
     }
+  }
+
+  /* Per-tool mini bars — "Cursor is all engineering, Claude Code carries the
+     writing" in one glance (SPEC_V2 §4.4). Installed weights: usage-less
+     tools must render honestly here too. */
+  function renderTuningByTool() {
+    const bar = document.getElementById('tuning-bar');
+    bar.textContent = '';
+    bar.classList.add('by-tool');
+    const present = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))];
+    for (const toolName of present) {
+      const subset = nodes.filter((n) => n.item.tool === toolName);
+      const shares = tuningShares('installed', subset);
+      if (shares === null) continue;
+      const row = document.createElement('div');
+      row.className = 'tune-tool-row';
+      const meta = toolMeta.get(toolName);
+      const label = document.createElement('span');
+      label.className = 'tune-tool-label';
+      label.style.color = meta !== undefined ? meta.color : '#8a93a6';
+      label.textContent = meta !== undefined ? meta.displayName : toolName;
+      const mini = document.createElement('div');
+      mini.className = 'tune-mini';
+      segRow(shares, mini);
+      row.append(label, mini);
+      bar.appendChild(row);
+    }
+  }
+
+  function renderTuning(mode) {
+    const bar = document.getElementById('tuning-bar');
+    bar.classList.remove('by-tool');
+    bar.textContent = '';
+    if (mode === 'bytool') {
+      renderTuningByTool();
+      return;
+    }
+    // Empty setup: both modes yield null — render an empty state, never throw
+    // (an exception here would kill the whole page script).
+    const shares = tuningShares(mode) || tuningShares('installed') || [];
+    if (shares.length === 0) {
+      const empty = document.createElement('span');
+      empty.className = 'tune-empty';
+      empty.textContent = 'nothing classifiable yet — install a skill or agent and re-run';
+      bar.appendChild(empty);
+      return;
+    }
+    segRow(shares, bar);
   }
 
   const totalUse = nodes.reduce((s, n) => s + n.usage.count, 0);
   const btnUsed = document.getElementById('toggle-used');
   const btnInstalled = document.getElementById('toggle-installed');
+  const btnByTool = document.getElementById('toggle-bytool');
   let tuneMode = 'used';
   if (totalUse === 0) {
     btnUsed.disabled = true;
@@ -90,10 +139,16 @@
     tuneMode = mode;
     btnUsed.classList.toggle('on', mode === 'used');
     btnInstalled.classList.toggle('on', mode === 'installed');
+    if (btnByTool !== null) btnByTool.classList.toggle('on', mode === 'bytool');
     renderTuning(mode);
   }
   btnUsed.addEventListener('click', () => setTuneMode('used'));
   btnInstalled.addEventListener('click', () => setTuneMode('installed'));
+  if (btnByTool !== null) {
+    const multiTool = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))].length > 1;
+    if (multiTool) btnByTool.addEventListener('click', () => setTuneMode('bytool'));
+    else btnByTool.hidden = true;
+  }
   setTuneMode(tuneMode);
 
   /* ---------- map ---------- */
@@ -175,9 +230,17 @@
     .attr('d', (n) =>
       symbol.type(SYMBOLS[n.item.kind] || d3.symbolCircle).size(n.r * n.r * Math.PI)(),
     )
-    .attr('fill', (n) => (n.usage.count === 0 ? DEAD : AXIS_COLOR[n.cls.primary]))
-    .attr('fill-opacity', (n) => (n.usage.count === 0 ? 0.55 : 0.92))
-    .attr('stroke', SURFACE)
+    .attr('fill', (n) =>
+      noUsageTool(n) ? AXIS_COLOR[n.cls.primary] : n.usage.count === 0 ? DEAD : AXIS_COLOR[n.cls.primary],
+    )
+    .attr('fill-opacity', (n) => (noUsageTool(n) ? 0.75 : n.usage.count === 0 ? 0.55 : 0.92))
+    .attr('stroke', (n) => {
+      if (toolList.filter((t) => t.detected).length < 2) return noUsageTool(n) ? '#a9b2c3' : SURFACE;
+      const meta = toolMeta.get(n.item.tool);
+      return meta !== undefined ? meta.color : SURFACE;
+    })
+    .attr('stroke-dasharray', (n) => (noUsageTool(n) ? '3 3' : null))
+    .attr('class', (n) => (noUsageTool(n) ? 'no-usage' : null))
     .attr('stroke-width', 2)
     .style('cursor', 'pointer');
 
@@ -254,12 +317,17 @@
       t1.textContent = n.item.name;
       const t2 = document.createElement('div');
       t2.className = 't2';
+      const meta = toolMeta.get(n.item.tool);
       t2.textContent =
         n.item.kind +
         ' · ' +
         n.cls.primary +
         ' · ' +
-        (n.usage.count === 0 ? 'never fired' : n.usage.count + '× in ' + data.days + 'd');
+        (noUsageTool(n)
+          ? 'usage unavailable for ' + (meta !== undefined ? meta.displayName : n.item.tool)
+          : n.usage.count === 0
+            ? 'never fired'
+            : n.usage.count + '× in ' + data.days + 'd');
       tip.append(t1, t2);
       tip.hidden = false;
     })
@@ -405,12 +473,40 @@
     kindFilters.append(row);
   }
 
+  const toolOn = {};
+  const toolFilters = document.getElementById('tool-filters');
+  if (toolFilters !== null) {
+    const toolsPresent = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))];
+    for (const tool of toolsPresent) {
+      toolOn[tool] = true;
+      const meta = toolMeta.get(tool);
+      const row = document.createElement('label');
+      row.className = 'filter-row';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = true;
+      box.addEventListener('change', () => {
+        toolOn[tool] = box.checked;
+        applyFilters();
+      });
+      const dot = document.createElement('span');
+      dot.className = 'key-dot';
+      dot.style.background = meta !== undefined ? meta.color : '#8a93a6';
+      const label = document.createElement('span');
+      label.textContent = meta !== undefined ? meta.displayName : tool;
+      row.append(box, dot, label);
+      toolFilters.append(row);
+    }
+  }
+
   const hideUnused = document.getElementById('hide-unused');
   hideUnused.addEventListener('change', applyFilters);
 
   function applyFilters() {
     const visible = (n) =>
-      kindOn[n.item.kind] !== false && (!hideUnused.checked || n.usage.count > 0);
+      kindOn[n.item.kind] !== false &&
+      toolOn[n.item.tool] !== false &&
+      (!hideUnused.checked || n.usage.count > 0 || noUsageTool(n));
     nodeSel.attr('display', (n) => (visible(n) ? null : 'none'));
     labelSel.attr('display', (n) => (visible(n) ? null : 'none'));
     linkSel.attr('display', (n) => (visible(n) ? null : 'none'));
@@ -476,6 +572,23 @@
   fillList('diag-gaps', data.diagnostics.gaps, {
     emptyText: 'No gaps — every axis has real coverage.',
   });
+
+  /* ---------- cross-tool diagnostics (SPEC_V2 §4.5) ---------- */
+  const crossTool = data.crossTool || { duplicates: [], imbalance: [], rulesOverlaps: [] };
+  const crossSection = document.getElementById('crosstool');
+  const multiToolMap = [...new Set(nodes.map((n) => n.item.tool).filter(Boolean))].length > 1;
+  if (crossSection !== null && multiToolMap) {
+    crossSection.hidden = false;
+    fillList('diag-xtool-dupes', crossTool.duplicates, {
+      emptyText: 'No MCP server is installed in more than one tool.',
+    });
+    fillList('diag-xtool-imbalance', crossTool.imbalance, {
+      emptyText: 'Capabilities are spread across your tools.',
+    });
+    fillList('diag-xtool-rules', crossTool.rulesOverlaps, {
+      emptyText: 'No overlapping rules files across tools.',
+    });
+  }
 
   /* ---------- share card (spec §4.4 — in-page PNG export, zero deps) ---------- */
   const shareBtn = document.getElementById('share-btn');

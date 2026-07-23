@@ -1,0 +1,5 @@
+{"timestamp":"2026-07-15T09:00:00.000Z","type":"response_item","payload":{"type":"function_call","name":"github__search_issues"}}
+{"timestamp":"2026-07-15T09:01:00.000Z","type":"response_item","payload":{"type":"function_call","name":"shell"}}
+{"timestamp":"2026-07-15T09:02:00.000Z","type":"response_item","payload":{"type":"function_call","name":"mcp__linear__create_issue"}}
+not json at all
+{"timestamp":"2026-07-15T09:03:00.000Z","type":"response_item","payload":{"type":"function_call","name":"github__get_pr"}}

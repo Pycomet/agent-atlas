@@ -205,3 +205,26 @@ describe('diagnose — gaps (spec §5.3)', () => {
     expect(report.gaps[0]!.line).toContain('no writing-oriented');
   });
 });
+
+describe('multi-tool dead weight honesty (v2)', () => {
+  it('excludes usage-less tools and uses per-tool session counts', async () => {
+    const inventory = {
+      items: [
+        { id: 'cursor/skill:sdk', kind: 'skill' as const, name: 'sdk', description: 'x', sourcePath: '/x', sizeBytes: 40, tool: 'cursor' },
+        { id: 'claude-code/skill:unused', kind: 'skill' as const, name: 'unused', description: 'y', sourcePath: '/y', sizeBytes: 40, tool: 'claude-code' },
+      ],
+    };
+    const usage = { totalSessions: 151, items: {} };
+    const report = await diagnose(inventory, usage, { mode: 'heuristic' as const, items: [] }, 30, {
+      tools: [
+        { name: 'claude-code', displayName: 'Claude Code', detected: true, usageSupport: 'full', itemCount: 1 },
+        { name: 'cursor', displayName: 'Cursor', detected: true, usageSupport: 'none', itemCount: 1 },
+      ],
+      sessionsByTool: { 'claude-code': 100, cursor: 0 },
+    });
+    const ids = report.deadWeight.map((f) => f.itemId);
+    expect(ids).toContain('claude-code/skill:unused');
+    expect(ids).not.toContain('cursor/skill:sdk');
+    expect(report.deadWeight[0]!.line).toContain('100 sessions');
+  });
+});

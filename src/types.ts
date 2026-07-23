@@ -1,5 +1,5 @@
 /** Kinds of items Agent Atlas tracks. Sorted alphabetically in output. */
-export type ItemKind = 'agent' | 'hook' | 'mcp' | 'memory' | 'skill';
+export type ItemKind = 'agent' | 'command' | 'hook' | 'mcp' | 'memory' | 'skill';
 
 export type McpTransport = 'stdio' | 'sse' | 'http' | 'unknown';
 
@@ -10,12 +10,16 @@ export interface InventoryItem {
   description: string | null;
   sourcePath: string;
   sizeBytes: number;
+  /** Owning tool (adapter name) — set by the adapter layer's id prefixing (SPEC_V2 §4.1). */
+  tool?: string;
   /** e.g. ["invalid-frontmatter"] — item kept, never a crash (spec §4.1). */
   flags?: string[];
   /** Agents only: allowed tools from frontmatter. */
   tools?: string[];
   /** MCP servers only. */
   transport?: McpTransport;
+  /** MCP servers only: normalized command/url identity for cross-tool duplicate matching. */
+  identity?: string;
   /** Hooks only. */
   event?: string;
   matcher?: string;
@@ -42,6 +46,21 @@ export interface ScanOptions {
   homeDir: string;
   /** Project directory to scan for .claude/, .mcp.json, CLAUDE.md. */
   projectDir?: string;
+}
+
+/** What an adapter can honestly report about invocation frequency (SPEC_V2 §3). */
+export type UsageSupport = 'full' | 'partial' | 'none';
+
+/** Everything an adapter needs to scan one machine (SPEC_V2 §4.1). */
+export interface AdapterContext {
+  homeDir: string;
+  projectDir?: string;
+  /** Usage window in days. */
+  days: number;
+  /** Injectable clock for deterministic tests. */
+  now?: Date;
+  /** Per-adapter config from ~/.agent-atlas/config.json, keyed by adapter name. */
+  config?: Record<string, unknown>;
 }
 
 /** The five capability axes, fixed for v1 (spec §4.3). Order breaks ties. */
@@ -101,15 +120,53 @@ export interface DiagnosticsReport {
   gaps: GapFinding[];
 }
 
+/** Cross-tool diagnostics (SPEC_V2 §4.5). */
+export interface CrossToolDuplicate {
+  /** Normalized MCP identity shared by the items. */
+  key: string;
+  itemIds: string[];
+  /** Tools where this server actually fired (omitted claim when no owner has usage data). */
+  usedIn: string[];
+  line: string;
+}
+
+export interface CapabilityImbalance {
+  axis: Axis;
+  concentratedIn: string;
+  share: number;
+  line: string;
+}
+
+export interface RulesOverlap {
+  itemIds: string[];
+  line: string;
+}
+
+export interface CrossToolReport {
+  duplicates: CrossToolDuplicate[];
+  imbalance: CapabilityImbalance[];
+  rulesOverlaps: RulesOverlap[];
+}
+
+/** Per-tool metadata surfaced in --json and embedded in atlas.html (SPEC_V2 §5). */
+export interface ToolMeta {
+  name: string;
+  displayName: string;
+  detected: boolean;
+  usageSupport: UsageSupport;
+  itemCount: number;
+}
+
 /** Everything the renderer embeds into atlas.html (spec §4.4). */
 export interface AtlasData {
   generatedAt: string;
   days: number;
-  tool: string;
+  tools: ToolMeta[];
   inventory: Inventory;
   usage: Usage;
   classification: ClassificationOutput;
   diagnostics: DiagnosticsReport;
+  crossTool: CrossToolReport;
 }
 
 export interface MineOptions {

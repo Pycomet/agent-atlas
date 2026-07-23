@@ -154,6 +154,29 @@ async function agentsFromDir(agentsDir: string): Promise<InventoryItem[]> {
 
 // ---------- MCP servers ----------
 
+/** Normalized duplicate-matching identity: url host+path, else command + sorted args. */
+export function mcpIdentity(server: Record<string, unknown>): string | null {
+  const url = server['url'];
+  if (typeof url === 'string' && url !== '') {
+    try {
+      const u = new URL(url);
+      return `url:${u.host}${u.pathname.replace(/\/$/, '')}`;
+    } catch {
+      return `url:${url}`;
+    }
+  }
+  const command = server['command'];
+  if (typeof command === 'string' && command !== '') {
+    const args = Array.isArray(server['args'])
+      ? server['args'].filter((a): a is string => typeof a === 'string')
+      : [];
+    // Version/tag-bearing args (foo@1.2.3, foo@latest) normalize so bumps still match.
+    const norm = args.map((a) => a.replace(/@[A-Za-z0-9.-]+$/, '@*')).sort();
+    return `cmd:${command} ${norm.join(' ')}`.trim();
+  }
+  return null;
+}
+
 function transportOf(config: Record<string, unknown>): McpTransport {
   const type = config['type'];
   if (type === 'stdio' || type === 'sse' || type === 'http') return type;
@@ -162,14 +185,14 @@ function transportOf(config: Record<string, unknown>): McpTransport {
   return 'unknown';
 }
 
-function mcpItems(config: Record<string, unknown> | null, sourcePath: string): InventoryItem[] {
+export function mcpItems(config: Record<string, unknown> | null, sourcePath: string): InventoryItem[] {
   const servers = asRecord(config?.['mcpServers']);
   if (servers === null) return [];
   const items: InventoryItem[] = [];
   for (const [name, raw] of Object.entries(servers)) {
     const server = asRecord(raw);
     if (server === null) continue;
-    items.push({
+    const item: InventoryItem = {
       id: `mcp:${name}`,
       kind: 'mcp',
       name,
@@ -177,7 +200,10 @@ function mcpItems(config: Record<string, unknown> | null, sourcePath: string): I
       sourcePath,
       sizeBytes: Buffer.byteLength(JSON.stringify(server), 'utf8'),
       transport: transportOf(server),
-    });
+    };
+    const identity = mcpIdentity(server);
+    if (identity !== null) item.identity = identity;
+    items.push(item);
   }
   return items;
 }

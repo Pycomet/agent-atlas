@@ -50,17 +50,17 @@ describe('agent-atlas CLI', () => {
     for (const item of parsed.inventory.items) {
       expect(parsed.usage.items[item.id]).toBeDefined();
     }
-    expect(parsed.usage.items['skill:git-workflow']).toEqual({
+    expect(parsed.usage.items['claude-code/skill:git-workflow']).toEqual({
       count: 3,
       lastUsed: '2026-07-15T09:00:00.000Z',
       sessionsSeen: 3,
     });
-    expect(parsed.usage.items['mcp:grafana']).toEqual({
+    expect(parsed.usage.items['claude-code/mcp:grafana']).toEqual({
       count: 0,
       lastUsed: null,
       sessionsSeen: 0,
     });
-    expect(parsed.usage.items['skill:broken-skill']).toEqual({
+    expect(parsed.usage.items['claude-code/skill:broken-skill']).toEqual({
       count: 0,
       lastUsed: null,
       sessionsSeen: 0,
@@ -73,7 +73,7 @@ describe('agent-atlas CLI', () => {
     const out = runCli('--json', '--home', HOME, '--project', PROJECT, '--days', '1');
     const parsed = JSON.parse(out) as CliJson;
     expect(parsed.usage.totalSessions).toBe(0);
-    expect(parsed.usage.items['skill:git-workflow']).toEqual({
+    expect(parsed.usage.items['claude-code/skill:git-workflow']).toEqual({
       count: 0,
       lastUsed: null,
       sessionsSeen: 0,
@@ -134,7 +134,7 @@ describe('agent-atlas CLI', () => {
     expect(parsed.classification.mode).toBe('heuristic');
     expect(parsed.classification.items).toHaveLength(Object.keys(expected).length);
     expect(parsed.classification.items.map((i) => i.itemId)).not.toContain(
-      'memory:user:CLAUDE.md',
+      'claude-code/memory:user:CLAUDE.md',
     );
     for (const [id, primary] of Object.entries(expected)) {
       const item = parsed.classification.items.find((i) => i.itemId === id);
@@ -147,7 +147,7 @@ describe('agent-atlas CLI', () => {
     const atlasDir = tmpAtlasDir();
     writeFileSync(
       join(atlasDir, 'overrides.json'),
-      JSON.stringify({ 'skill:git-workflow': { primary: 'design' } }),
+      JSON.stringify({ 'claude-code/skill:git-workflow': { primary: 'design' } }),
     );
     const out = runCli(
       '--json',
@@ -161,7 +161,7 @@ describe('agent-atlas CLI', () => {
       atlasDir,
     );
     const parsed = JSON.parse(out) as CliJson;
-    const item = parsed.classification.items.find((i) => i.itemId === 'skill:git-workflow')!;
+    const item = parsed.classification.items.find((i) => i.itemId === 'claude-code/skill:git-workflow')!;
     expect(item.method).toBe('override');
     expect(item.primary).toBe('design');
   });
@@ -195,5 +195,40 @@ describe('agent-atlas CLI', () => {
     );
     expect(out).toContain('Tuning');
     expect(out.toLowerCase()).toContain('rough mode');
+  });
+});
+
+describe('multi-tool CLI surface (v2)', () => {
+  it('--list-tools lists every registered adapter with detection status', () => {
+    const out = runCli('--list-tools', '--home', HOME, '--project', PROJECT);
+    expect(out).toMatch(/claude-code\s+Claude Code\s+detected\s+usage:full/);
+  });
+
+  it('--tool with an unknown name exits 1 and lists valid names', () => {
+    let failed = false;
+    try {
+      runCli('--tool', 'nope', '--json', '--home', HOME, '--project', PROJECT);
+    } catch (error) {
+      failed = true;
+      const stderr = (error as { stderr?: Buffer | string }).stderr?.toString() ?? '';
+      expect(stderr).toContain('unknown tool');
+      expect(stderr).toContain('claude-code');
+    }
+    expect(failed).toBe(true);
+  });
+
+  it('--json includes a tools array with detection + usage metadata', () => {
+    const out = runCli(
+      '--json', '--home', HOME, '--project', PROJECT, '--days', '36500',
+      '--atlas-dir', tmpAtlasDir(),
+    );
+    const parsed = JSON.parse(out) as CliJson & {
+      tools: { name: string; displayName: string; detected: boolean; usageSupport: string; itemCount: number }[];
+    };
+    const cc = parsed.tools.find((t) => t.name === 'claude-code');
+    expect(cc).toBeDefined();
+    expect(cc!.detected).toBe(true);
+    expect(cc!.usageSupport).toBe('full');
+    expect(cc!.itemCount).toBe(parsed.inventory.items.length);
   });
 });

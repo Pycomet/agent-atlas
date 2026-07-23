@@ -1,22 +1,51 @@
+import { join } from 'node:path';
+import { codexAdapter } from './adapters/codex.js';
+import { cursorAdapter } from './adapters/cursor.js';
+import { opencodeAdapter, orgnCdeAdapter } from './adapters/opencode-family.js';
+import { dirExists, prefixInventory, prefixUsage } from './adapters/shared.js';
 import { mineUsage } from './miner.js';
 import { scan } from './scanner.js';
-import type { Inventory, MineOptions, ScanOptions, Usage } from './types.js';
+import type { AdapterContext, Inventory, Usage, UsageSupport } from './types.js';
+
+export { dirExists, fileExists, prefixInventory, prefixUsage } from './adapters/shared.js';
 
 /**
- * Per-tool adapter (spec §2): each AI coding tool implements this pair and
- * yields tool-agnostic JSON. v1 ships Claude Code only; a CursorAdapter etc.
- * would be another entry in `adapters`.
+ * Per-tool adapter (SPEC_V2 §4.1): each AI coding tool implements this and
+ * yields tool-agnostic JSON with tool-namespaced ids. The CLI runs detect()
+ * on every registered adapter and scans only the ones that are present.
  */
 export interface ToolAdapter {
   name: string;
-  scan(opts: ScanOptions): Promise<Inventory>;
-  mineUsage(opts: MineOptions): Promise<Usage>;
+  displayName: string;
+  usageSupport: UsageSupport;
+  detect(ctx: AdapterContext): Promise<boolean>;
+  scan(ctx: AdapterContext): Promise<Inventory>;
+  mineUsage(ctx: AdapterContext): Promise<Usage>;
 }
 
 export const claudeCodeAdapter: ToolAdapter = {
   name: 'claude-code',
-  scan,
-  mineUsage,
+  displayName: 'Claude Code',
+  usageSupport: 'full',
+  detect: (ctx) => dirExists(join(ctx.homeDir, '.claude')),
+  scan: async (ctx) =>
+    prefixInventory(await scan({ homeDir: ctx.homeDir, projectDir: ctx.projectDir }), 'claude-code'),
+  mineUsage: async (ctx) =>
+    prefixUsage(
+      await mineUsage({ homeDir: ctx.homeDir, days: ctx.days, now: ctx.now }),
+      'claude-code',
+    ),
 };
 
-export const adapters: ToolAdapter[] = [claudeCodeAdapter];
+export const adapters: ToolAdapter[] = [
+  claudeCodeAdapter,
+  codexAdapter,
+  cursorAdapter,
+  orgnCdeAdapter,
+  opencodeAdapter,
+];
+
+export async function detectAdapters(ctx: AdapterContext): Promise<ToolAdapter[]> {
+  const flags = await Promise.all(adapters.map((adapter) => adapter.detect(ctx)));
+  return adapters.filter((_, i) => flags[i] === true);
+}

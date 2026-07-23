@@ -4,9 +4,10 @@ import { promises as fs } from 'node:fs';
 import { Command } from 'commander';
 import os from 'node:os';
 import { join, resolve } from 'node:path';
-import { adapters } from './adapter.js';
+import { adapters, detectAdapters } from './adapter.js';
 import { createAnthropicModel } from './classifier/anthropic-model.js';
 import { classify } from './classifier/index.js';
+import { crossToolDiagnose } from './cross-tool.js';
 import { diagnose } from './diagnostics.js';
 import { mergeUsage } from './miner.js';
 import { renderAtlas } from './renderer/index.js';
@@ -23,6 +24,8 @@ interface CliOptions {
   out: string;
   open: boolean;
   share?: boolean;
+  listTools?: boolean;
+  tool?: string[];
 }
 
 /** Best-effort browser launch — never fails the run, never blocks exit. */
@@ -40,9 +43,9 @@ const program = new Command();
 program
   .name('agent-atlas')
   .description(
-    'Scans your Claude Code setup (skills, agents, MCP servers, hooks) and mines usage from session transcripts. Read-only, local-only; only item names/descriptions are sent to the classification API.',
+    'Scans your AI coding setup — Claude Code, Codex CLI, Cursor, ORGN CDE, OpenCode — and mines usage from local session data. Read-only, local-only; only item names/descriptions are sent to the classification API.',
   )
-  .version('0.1.0')
+  .version('0.2.0')
   .option('--json', 'dump raw inventory + usage + classification as JSON')
   .option('--days <n>', 'usage window in days', '30')
   .option('--rough', 'force keyword-heuristic classification (skip the API)')
@@ -52,6 +55,12 @@ program
   .option('--no-open', 'do not open atlas.html in the browser')
   .option('--home <dir>', 'treat <dir> as the home directory (mainly for testing)')
   .option('--project <dir>', 'project directory to scan', process.cwd())
+  .option('--list-tools', 'list registered tool adapters and their detection status, then exit')
+  .option(
+    '--tool <name>',
+    'restrict scanning to the named tool (repeatable)',
+    (value: string, prev: string[] = []) => [...prev, value],
+  )
   .action(async (opts: CliOptions) => {
     const days = Number.parseInt(opts.days, 10);
     if (!Number.isInteger(days) || days <= 0) {
@@ -62,17 +71,56 @@ program
     const homeDir = opts.home ?? os.homedir();
     const atlasDir = opts.atlasDir ?? join(os.homedir(), '.agent-atlas');
 
-    // One adapter per supported tool (spec §2) — v1 ships Claude Code only.
+    // One adapter per supported tool (SPEC_V2 §3); only detected tools scan.
+    const ctx = { homeDir, projectDir: opts.project, days };
+    const detected = await detectAdapters(ctx);
+    const detectedNames = new Set(detected.map((a) => a.name));
+
+    if (opts.listTools === true) {
+      for (const adapter of adapters) {
+        process.stdout.write(
+          `${adapter.name.padEnd(14)}${adapter.displayName.padEnd(14)}${
+            detectedNames.has(adapter.name) ? 'detected' : 'not detected'
+          }  usage:${adapter.usageSupport}\n`,
+        );
+      }
+      return;
+    }
+
+    const validNames = adapters.map((a) => a.name);
+    for (const name of opts.tool ?? []) {
+      if (!validNames.includes(name)) {
+        process.stderr.write(`error: unknown tool "${name}" — valid: ${validNames.join(', ')}\n`);
+        process.exitCode = 1;
+        return;
+      }
+    }
+    const selected =
+      opts.tool !== undefined && opts.tool.length > 0
+        ? detected.filter((a) => opts.tool?.includes(a.name))
+        : detected;
+
     const items: InventoryItem[] = [];
     let totalSessions = 0;
     const usageItems: Record<string, UsageEntry> = {};
-    for (const adapter of adapters) {
-      const inv = await adapter.scan({ homeDir, projectDir: opts.project });
+    const perToolCounts = new Map<string, number>();
+    const sessionsByTool: Record<string, number> = {};
+    for (const adapter of selected) {
+      const inv = await adapter.scan(ctx);
       items.push(...inv.items);
-      const mined = await adapter.mineUsage({ homeDir, days });
+      perToolCounts.set(adapter.name, inv.items.length);
+      const mined = await adapter.mineUsage(ctx);
       totalSessions += mined.totalSessions;
+      sessionsByTool[adapter.name] = mined.totalSessions;
       Object.assign(usageItems, mined.items);
     }
+    const tools = adapters.map((adapter) => ({
+      name: adapter.name,
+      displayName: adapter.displayName,
+      detected: detectedNames.has(adapter.name),
+      usageSupport: adapter.usageSupport,
+      itemCount: perToolCounts.get(adapter.name) ?? 0,
+    }));
     const inventory = { items };
     const usage: Usage = mergeUsage(inventory, { totalSessions, items: usageItems });
 
@@ -80,11 +128,12 @@ program
     const useLlm = opts.rough !== true && typeof apiKey === 'string' && apiKey !== '';
     const model = useLlm ? createAnthropicModel() : null;
     const classification = await classify(inventory, { atlasDir, model });
-    const diagnostics = await diagnose(inventory, usage, classification, days, { model });
+    const diagnostics = await diagnose(inventory, usage, classification, days, { model, tools, sessionsByTool });
+    const crossTool = crossToolDiagnose(inventory, usage, classification, tools);
 
     if (opts.json === true) {
       process.stdout.write(
-        `${JSON.stringify({ days, inventory, usage, classification, diagnostics }, null, 2)}\n`,
+        `${JSON.stringify({ days, tools, inventory, usage, classification, diagnostics, crossTool }, null, 2)}\n`,
       );
       return;
     }
@@ -93,11 +142,12 @@ program
     const html = await renderAtlas({
       generatedAt: new Date().toISOString(),
       days,
-      tool: 'claude-code',
+      tools,
       inventory,
       usage,
       classification,
       diagnostics,
+      crossTool,
     });
     const outPath = resolve(opts.out);
     await fs.writeFile(outPath, html);
@@ -163,6 +213,12 @@ program
     }
     if (diagnostics.gaps.length > 0) {
       lines.push(`Gaps: no real coverage for ${diagnostics.gaps.map((g) => g.axis).join(', ')}`);
+    }
+    if (crossTool.duplicates.length > 0) {
+      lines.push(`Cross-tool: ${crossTool.duplicates[0]?.line ?? ''}`);
+    }
+    for (const finding of crossTool.imbalance.slice(0, 2)) {
+      lines.push(`Cross-tool: ${finding.line}`);
     }
     lines.push('');
     lines.push(`Map written to ${outPath}${shouldOpen ? ' (opening in browser)' : ''}`);

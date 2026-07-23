@@ -1,0 +1,6 @@
+{
+  "mcpServers": {
+    "github": { "url": "https://project-override.example.com/mcp" },
+    "trigger": { "command": "npx", "args": ["trigger.dev@4.4.2", "mcp"] }
+  }
+}

@@ -108,4 +108,69 @@ describe('mergeUsage', () => {
       sessionsSeen: 1,
     });
   });
+
+  it('credits prefixed plugin skills when transcripts use a different prefix', () => {
+    const inventory: Inventory = {
+      items: [
+        {
+          id: 'skill:vercel-plugin:deploy',
+          kind: 'skill',
+          name: 'vercel-plugin:deploy',
+          description: null,
+          sourcePath: '/x',
+          sizeBytes: 1,
+        },
+      ],
+    };
+    const usage = {
+      totalSessions: 2,
+      items: {
+        'skill:vercel:deploy': { count: 3, lastUsed: '2026-07-01T00:00:00.000Z', sessionsSeen: 2 },
+      },
+    };
+
+    const merged = mergeUsage(inventory, usage);
+
+    expect(merged.items['skill:vercel-plugin:deploy']).toEqual({
+      count: 3,
+      lastUsed: '2026-07-01T00:00:00.000Z',
+      sessionsSeen: 2,
+    });
+    expect(merged.items['skill:vercel:deploy']).toBeUndefined();
+  });
+
+  it('never guesses when two inventory items share a bare skill name', () => {
+    const inventory: Inventory = {
+      items: [
+        {
+          id: 'skill:plugin-a:deploy',
+          kind: 'skill',
+          name: 'plugin-a:deploy',
+          description: null,
+          sourcePath: '/a',
+          sizeBytes: 1,
+        },
+        {
+          id: 'skill:plugin-b:deploy',
+          kind: 'skill',
+          name: 'plugin-b:deploy',
+          description: null,
+          sourcePath: '/b',
+          sizeBytes: 1,
+        },
+      ],
+    };
+    const usage = {
+      totalSessions: 1,
+      items: {
+        'skill:other:deploy': { count: 5, lastUsed: '2026-07-01T00:00:00.000Z', sessionsSeen: 1 },
+      },
+    };
+
+    const merged = mergeUsage(inventory, usage);
+
+    expect(merged.items['skill:plugin-a:deploy'].count).toBe(0);
+    expect(merged.items['skill:plugin-b:deploy'].count).toBe(0);
+    expect(merged.items['skill:other:deploy'].count).toBe(5);
+  });
 });
